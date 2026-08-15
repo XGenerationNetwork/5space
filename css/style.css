@@ -1,0 +1,197 @@
+/* 5Space - the canvas fills the window; everything else floats over it. */
+
+:root {
+  --ink: #cfe4ff;
+  --dim: #7f96b0;
+  --accent: #40c0f0;
+  --gold: #ffd24a;
+  --panel: rgba(8, 12, 20, 0.88);
+  --edge: rgba(90, 140, 190, 0.35);
+  --mono: "DejaVu Sans Mono", "Liberation Mono", Menlo, Consolas, "Courier New", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05060a;
+  color: var(--ink);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+#screen {
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.hidden { display: none !important; }
+
+/* ---- message log ---------------------------------------------------- */
+
+#messages {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  max-width: min(52ch, 60vw);
+  pointer-events: none;
+  font-size: 13px;
+  line-height: 1.45;
+  text-shadow: 0 1px 3px #000, 0 0 8px #000;
+}
+
+#messages .msg {
+  color: var(--ink);
+  transition: opacity 0.2s linear;
+}
+
+/* ---- the big banner ------------------------------------------------- */
+
+#banner {
+  position: fixed;
+  top: 32%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: clamp(22px, 5vw, 46px);
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  text-shadow: 0 2px 16px #000, 0 0 40px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+}
+
+#banner.fade { animation: bannerFade 2.4s ease-out forwards; }
+
+@keyframes bannerFade {
+  0% { opacity: 0; transform: scale(1.12); }
+  12% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.04); }
+}
+
+/* ---- overlays: menus, prompts, full-screen text ---------------------- */
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 5, 10, 0.82);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+  padding: 20px;
+}
+
+.menu {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 18px 22px;
+  max-width: min(96ch, 96vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  box-shadow: 0 12px 60px rgba(0, 0, 0, 0.8);
+}
+
+.menu.full { min-width: min(88ch, 92vw); }
+
+.mtitle {
+  display: block;
+  color: var(--gold);
+  font-weight: bold;
+  margin-bottom: 10px;
+  letter-spacing: 0.04em;
+}
+
+.mhead {
+  color: var(--accent);
+  margin: 12px 0 4px;
+  font-weight: bold;
+}
+
+.mrow {
+  white-space: pre-wrap;
+  color: var(--ink);
+  padding: 1px 0;
+}
+
+.mrow.pick {
+  cursor: pointer;
+  padding: 3px 6px;
+  margin: 1px -6px;
+  border-radius: 3px;
+}
+
+.mrow.pick:hover { background: rgba(64, 192, 240, 0.14); }
+
+.msel {
+  display: inline-block;
+  min-width: 2.4ch;
+  color: var(--gold);
+  font-weight: bold;
+}
+
+.mfoot {
+  display: block;
+  margin-top: 12px;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.logo { color: #56d0ff; white-space: pre; }
+.hi { color: var(--gold); }
+
+.entry { color: #fff; }
+.caret { animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---- the hull picker ------------------------------------------------- */
+
+.shipname { font-weight: bold; }
+.shipstats { color: var(--dim); font-size: 12px; }
+.shipblurb { color: var(--ink); font-size: 12.5px; padding: 2px 0 0 2.4ch; opacity: 0.9; }
+.shiphint { color: var(--dim); font-size: 12px; padding: 0 0 4px 2.4ch; font-style: italic; }
+
+/* ---- touch controls -------------------------------------------------- */
+
+#touchbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 3px;
+  padding: 4px;
+  z-index: 15;
+}
+
+#touchbar button {
+  background: rgba(20, 32, 48, 0.85);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 12px 0;
+  touch-action: none;
+  user-select: none;
+}
+
+#touchbar button:active { background: rgba(64, 192, 240, 0.3); }
+
+@media (max-width: 700px) {
+  #messages { font-size: 11px; max-width: 70vw; }
+  .menu { font-size: 12px; padding: 12px 14px; }
+}

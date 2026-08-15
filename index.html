@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5Space &mdash; a SubSpace roguelike</title>
+<meta name="description" content="Fly a 1997 space shooter through twenty-six procedurally generated sectors. Find the Prime Flag, carry it back out. Dying is permanent. Runs in your browser, offline, with nothing to install.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305060a'/%3E%3Cpath d='M16 4 L26 27 L16 21 L6 27 Z' fill='%2340c0f0'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #05060a;
+    --panel: #0b1018;
+    --panel2: #0e141e;
+    --ink: #d3e6ff;
+    --dim: #8ba0b8;
+    --faint: #61748c;
+    --accent: #40c0f0;
+    --gold: #ffd24a;
+    --green: #7dffa8;
+    --red: #ff6b6b;
+    --edge: rgba(90, 140, 190, 0.26);
+    --mono: "DejaVu Sans Mono", "Liberation Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(64,192,240,0.10), transparent 70%),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 15px;
+    line-height: 1.62;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 22px 90px; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  code { background: rgba(64,192,240,0.10); border-radius: 3px; padding: 1px 5px; font-size: 13px; }
+
+  /* ---- hero ---------------------------------------------------------- */
+
+  header { text-align: center; padding: 58px 0 30px; }
+  h1 {
+    font-size: clamp(34px, 8vw, 62px);
+    margin: 0;
+    letter-spacing: 0.06em;
+    color: #eaf4ff;
+    text-shadow: 0 0 34px rgba(64,192,240,0.42);
+  }
+  .tag { color: var(--dim); font-size: 15px; margin: 12px auto 0; max-width: 54ch; }
+  .art {
+    color: var(--faint);
+    font-size: clamp(8px, 1.7vw, 12px);
+    line-height: 1.3;
+    margin: 26px 0 4px;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .play {
+    display: inline-block;
+    margin: 24px 0 10px;
+    padding: 15px 44px;
+    background: var(--accent);
+    color: #04121c;
+    font-family: var(--mono);
+    font-weight: bold;
+    font-size: 17px;
+    letter-spacing: 0.1em;
+    border-radius: 4px;
+    text-decoration: none;
+    box-shadow: 0 0 30px rgba(64,192,240,0.34);
+  }
+  .play:hover { background: var(--gold); color: #1c1404; box-shadow: 0 0 34px rgba(255,210,74,0.4); }
+  .nodeps { color: var(--faint); font-size: 12.5px; margin-top: 2px; }
+
+  /* ---- sections ------------------------------------------------------ */
+
+  h2 {
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 54px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--edge);
+  }
+  h3 { font-size: 15px; margin: 24px 0 6px; color: var(--gold); }
+  .lede { font-size: 16px; color: #e2eeff; }
+
+  /* ---- quickstart ---------------------------------------------------- */
+
+  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 16px 46px;
+    margin: 0;
+  }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0; top: 1px;
+    width: 30px; height: 30px;
+    border: 1px solid var(--edge);
+    border-radius: 50%;
+    color: var(--gold);
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel);
+  }
+  ol.steps b { color: #eaf4ff; }
+
+  /* ---- control cards ------------------------------------------------- */
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 5px;
+    padding: 14px 16px 6px;
+  }
+  .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .keyrow { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; border-top: 1px solid rgba(90,140,190,0.10); }
+  .card .keyrow:first-of-type { border-top: 0; }
+  .keyrow kbd {
+    flex: 0 0 auto;
+    min-width: 8.5em;
+    border: 1px solid var(--edge);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    background: var(--panel2);
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    padding: 2px 6px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .keyrow span { font-size: 13.5px; color: var(--ink); }
+  .keyrow em { color: var(--faint); font-style: normal; font-size: 12.5px; }
+
+  /* ---- tables -------------------------------------------------------- */
+
+  table { border-collapse: collapse; width: 100%; margin: 0 0 18px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--edge); vertical-align: top; }
+  th { color: var(--accent); font-weight: normal; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .hulls td:first-child { font-weight: bold; white-space: nowrap; }
+  .legend td:first-child { white-space: nowrap; font-weight: bold; width: 1%; }
+
+  /* ---- callout ------------------------------------------------------- */
+
+  .callout {
+    background: linear-gradient(180deg, rgba(255,107,107,0.07), rgba(255,107,107,0.02));
+    border: 1px solid rgba(255,107,107,0.3);
+    border-radius: 5px;
+    padding: 14px 18px;
+    margin: 0 0 18px;
+  }
+  .callout strong { color: var(--red); }
+
+  footer {
+    margin-top: 64px; padding-top: 20px;
+    border-top: 1px solid var(--edge);
+    color: var(--faint); font-size: 13px;
+  }
+
+  @media (max-width: 620px) {
+    body { font-size: 14px; }
+    .wrap { padding: 0 14px 60px; }
+    header { padding: 34px 0 20px; }
+    .keyrow { flex-direction: column; gap: 2px; }
+    .keyrow kbd { min-width: 0; align-self: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>5SPACE</h1>
+  <p class="tag">A 1997 space shooter with a roguelike underneath it.
+  Twenty-six sectors down, take the Prime Flag, fly it back out.
+  Dying is permanent.</p>
+
+<pre class="art">
+      ·                    ▓▓▓▓                          ·
+                          ▓▓▓▓▓▓         ◈                       ·
+   ·        ▲                ▓▓             ╔══════╗
+           ╱ ╲   ·                          ║ ····◇║      ·
+     ·    ▼                        ·        ╠═╧══╧═╣
+              ·        ▲you                 ║◇····◇║   ·
+   ◇      ·                    ·            ╚══════╝
+</pre>
+
+  <a class="play" href="play.html">PLAY</a>
+  <p class="nodeps">Runs in the browser. Nothing to install, no account, works offline.
+  It saves as you fly.</p>
+</header>
+
+<h2>What you are getting into</h2>
+
+<p class="lede">You fly one ship, in real time, with momentum. There is no braking &mdash;
+only thrusting the other way. Space is mostly empty, dotted with asteroid fields and
+hard-walled bases, and everything else out there is another pilot in one of the same
+eight ships you chose from.</p>
+
+<p>Underneath that is a roguelike. Each sector is generated when you first enter it and
+kept exactly as you left it. Your ship gets stronger by collecting prizes whose contents
+you cannot see until you take them. And when you die, that run is over &mdash; there is no
+respawn and the save is deleted.</p>
+
+<div class="callout">
+<p><strong>The one thing to understand before you launch:</strong> your energy bar is
+your health, your ammunition and your afterburner, all at once, out of a single pool that
+recharges on its own. Every shot you fire is health you have decided not to have. Running
+your bar down to nothing in a firefight is how most runs end.</p>
+</div>
+
+<h2>Your first three minutes</h2>
+
+<ol class="steps">
+  <li><b>Get a feel for the drift.</b> Hold <code>Up</code> to thrust, and notice that
+    letting go does not slow you down. Turning with <code>Left</code> and <code>Right</code>
+    changes where you are pointing, not where you are going. Being able to fly backwards
+    while still facing an enemy is the whole skill of this game.</li>
+  <li><b>Collect the green diamonds.</b> They are everywhere in open space. Each one gives
+    you something &mdash; a faster recharge, a better gun, a new ability &mdash; and a few
+    take something away. Sector 1 is thinly defended on purpose; farm it.</li>
+  <li><b>Check what you have built.</b> Press <code>I</code> for the ship readout. It shows
+    how far each of your handling numbers has come from the factory hull towards its
+    ceiling, and what gear you are carrying.</li>
+  <li><b>Find the gold ring.</b> That is the warp portal down. The corner radar shows it
+    once you have swept that part of the map; hold <code>Alt</code> for the whole sector.</li>
+  <li><b>Go down when you are ready, not when you find it.</b> Nothing rushes you.
+    A sector you have stripped of prizes is worth more than one you arrived in early.</li>
+</ol>
+
+<h2>Controls</h2>
+
+<p>These are SubSpace's original bindings, key for key. <code>WASD</code> works alongside
+the arrows and <code>Space</code> alongside <code>Ctrl</code>, if that suits your hands
+better.</p>
+
+<div class="cards">
+
+  <div class="card">
+    <h3>Flying</h3>
+    <div class="keyrow"><kbd>Left / Right</kbd><span>turn <em>&mdash; A and D also</em></span></div>
+    <div class="keyrow"><kbd>Up / Down</kbd><span>thrust forward and back <em>&mdash; W and S also</em></span></div>
+    <div class="keyrow"><kbd>Shift</kbd><span>afterburner <em>&mdash; faster, eats energy</em></span></div>
+    <div class="keyrow"><kbd>Insert</kbd><span>warp <em>&mdash; a random jump within the sector</em></span></div>
+  </div>
+
+  <div class="card">
+    <h3>Shooting</h3>
+    <div class="keyrow"><kbd>Ctrl or Space</kbd><span>fire guns</span></div>
+    <div class="keyrow"><kbd>Tab</kbd><span>fire a bomb</span></div>
+    <div class="keyrow"><kbd>Shift+Tab</kbd><span>lay a mine <em>&mdash; Shark and Lancaster</em></span></div>
+    <div class="keyrow"><kbd>Delete</kbd><span>toggle multifire <em>&mdash; if the hull has it</em></span></div>
+    <div class="keyrow"><kbd>Shift+Delete</kbd><span>burst <em>&mdash; bullets in every direction</em></span></div>
+    <div class="keyrow"><kbd>Shift+Ctrl or `</kbd><span>repel <em>&mdash; shoves ships and shots away</em></span></div>
+  </div>
+
+  <div class="card">
+    <h3>Gear</h3>
+    <div class="keyrow"><kbd>Home</kbd><span>toggle stealth <em>&mdash; off enemy radar</em></span></div>
+    <div class="keyrow"><kbd>Shift+Home</kbd><span>toggle cloak <em>&mdash; invisible entirely</em></span></div>
+    <div class="keyrow"><kbd>End</kbd><span>toggle X-Radar <em>&mdash; see through walls</em></span></div>
+    <div class="keyrow"><kbd>Shift+End</kbd><span>toggle antiwarp <em>&mdash; pins enemies in place</em></span></div>
+    <div class="keyrow"><kbd>Shift+Insert</kbd><span>drop or use a portal</span></div>
+    <div class="keyrow"><kbd>F3 F4 F5 F6</kbd><span>rocket, brick, decoy, thor</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Information</h3>
+    <div class="keyrow"><kbd>Alt</kbd><span>whole-sector map <em>&mdash; hold it down</em></span></div>
+    <div class="keyrow"><kbd>I</kbd><span>ship readout <em>&mdash; what the prizes built</em></span></div>
+    <div class="keyrow"><kbd>\</kbd><span>prizes you have opened</span></div>
+    <div class="keyrow"><kbd>P</kbd><span>pause</span></div>
+    <div class="keyrow"><kbd>Ctrl+S</kbd><span>save without leaving</span></div>
+    <div class="keyrow"><kbd>Esc</kbd><span>menu <em>&mdash; save and quit lives here</em></span></div>
+    <div class="keyrow"><kbd>?</kbd><span>this list, in game</span></div>
+  </div>
+
+</div>
+
+<h2>What you are looking at</h2>
+
+<table class="legend">
+  <tr><th>On screen</th><th>Meaning</th></tr>
+  <tr><td style="color:#7dffa8">green diamond</td><td>a prize. You never know which one until you take it &mdash; and some are negative</td></tr>
+  <tr><td style="color:#ffd24a">gold ring</td><td>the warp portal down, to the next sector</td></tr>
+  <tr><td style="color:#40c0f0">blue ring</td><td>the warp portal back up. In sector 1 it is the way out</td></tr>
+  <tr><td style="color:#2fae70">green pad</td><td>a safe zone. Nothing can hurt you and you recharge three times as fast &mdash; but a timer throws you out after twenty-five seconds</td></tr>
+  <tr><td style="color:#a060ff">purple well</td><td>a wormhole. It pulls you in, faster and faster, then spits you out somewhere else</td></tr>
+  <tr><td style="color:#8899bb">grey plating</td><td>a base. The best prizes are inside, behind doors that open and shut on a timer, guarded by pilots stationed there</td></tr>
+  <tr><td style="color:#3a7a8a">blue grid</td><td>an energy screen. You can fly through it; shots cannot pass</td></tr>
+  <tr><td style="color:#5a5a66">drifting hull</td><td>a derelict. Fly into it and it breaks open into a burst of prizes</td></tr>
+  <tr><td>number under a ship</td><td>that pilot's bounty. High numbers are pilots who have been collecting</td></tr>
+</table>
+
+<h2>Choosing a ship</h2>
+
+<p>Your hull is the whole character sheet and it is fixed for the run. What changes is what
+the prizes build on top of it. If it is your first run, take the <strong>Warbird</strong>.</p>
+
+<table class="hulls">
+  <tr><th>Hull</th><th></th></tr>
+  <tr><td style="color:#ff5555">Warbird</td><td>The duelist. Heavy guns, a punishing bomb, and enough energy to trade shots. Straightforward and forgiving &mdash; the one to learn on.</td></tr>
+  <tr><td style="color:#ffaa33">Javelin</td><td>A bomb rack with an engine bolted on. Fast, agile, lethal at range, and made of paper.</td></tr>
+  <tr><td style="color:#55ff88">Spider</td><td>Recharges faster than anything else in the sky. Small pool, weak bombs, but it can still be firing when everything else is dry.</td></tr>
+  <tr><td style="color:#cc66ff">Leviathan</td><td>A capital ship. Enormous energy, a bomb that clears a room, and the turning circle of a continent.</td></tr>
+  <tr><td style="color:#ffff66">Terrier</td><td>Support. Portals, bursts and repels, excellent recharge, and almost no ability to hurt anything.</td></tr>
+  <tr><td style="color:#66ddff">Weasel</td><td>Cloak, stealth, and the fastest hull in the game. Everything else about it is a liability.</td></tr>
+  <tr><td style="color:#88aaff">Lancaster</td><td>Bouncing bullets from launch, a decent bomb, mines, and no weakness sharp enough to name.</td></tr>
+  <tr><td style="color:#ff77cc">Shark</td><td>Mines and repels. It cannot win a straight fight, so it makes sure there are no straight fights.</td></tr>
+</table>
+
+<h2>The run</h2>
+
+<ul>
+  <li><strong>The goal.</strong> Sector 26 holds the <strong>Prime Flag</strong> in a sealed
+    vault with a very large thing guarding it. Take it, then climb all twenty-six sectors
+    back up and leave through the blue portal in sector 1.</li>
+  <li><strong>Carrying it makes the whole chain hostile.</strong> Reinforcements start
+    hunting you every few seconds instead of every few minutes. The way out is a fighting
+    retreat, and that is the point.</li>
+  <li><strong>Prizes are unidentified.</strong> Every one looks the same. Deeper sectors
+    have more negative ones. <code>\</code> shows the log of what you have opened, which is
+    how you learn the odds.</li>
+  <li><strong>You can never be prized below the ship you launched in.</strong> A negative
+    prize costs you an upgrade, never the hull. A run can stall; it cannot spiral.</li>
+  <li><strong>It saves constantly</strong> &mdash; every twenty seconds, on every sector
+    change, and whenever you close the tab. Reopening offers <em>Continue</em>. You can also
+    export a run to a file and import it on another machine.</li>
+  <li><strong>Death is final.</strong> It deletes the save and writes a line in the local
+    score table.</li>
+</ul>
+
+<h2>Three things that will kill you</h2>
+
+<ol>
+  <li><strong>Firing until you are empty.</strong> An enemy with a full bar and a bomb kills
+    you at any range. Break off at half energy, not at a quarter.</li>
+  <li><strong>Flying in a straight line.</strong> Ships fire along one of forty fixed
+    headings, and shots carry the shooter's own speed, so a predictable target is an easy
+    one and an unpredictable one is genuinely hard to hit. Keep turning.</li>
+  <li><strong>Corridors.</strong> Inside a base a bomb has nowhere to miss, and a Lancaster's
+    bouncing bullets will find you around a corner. Fight in the open unless the prizes are
+    worth it.</li>
+</ol>
+
+<footer>
+  <p><strong>5Space</strong> is an independent implementation of SubSpace's mechanics,
+  written from the documented settings and behaviour. It shares no code and no assets with
+  the original &mdash; every sprite is drawn into a canvas when the page loads. SubSpace was
+  released by Virgin Interactive in 1997 and lives on as Continuum.</p>
+  <p>Reference material:
+  <a href="https://github.com/plushmonkey/nullspace">plushmonkey/nullspace</a> and
+  <a href="https://github.com/assofohdz/Subspace-Infinity">Subspace-Infinity</a>.
+  Build instructions, architecture and the test suite are in the
+  <a href="README.md">README</a>.</p>
+  <p><a class="play" style="padding:11px 30px;font-size:15px" href="play.html">PLAY</a></p>
+</footer>
+
+</div>
+</body>
+</html>
