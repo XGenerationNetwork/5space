@@ -194,10 +194,23 @@ script list comes out of `play.html`, so the two cannot drift apart — and chec
   time and on greens collected, not the median: survival is strongly bimodal —
   the autopilot either dies early or rides out the whole window — so the median
   jumps between the two humps with the sample size and makes for a flaky test
+- **input** — every way a key can go down under one set of modifiers and come
+  up under another: WASD released while Shift is held, Caps Lock, both Shift
+  keys, losing focus mid-turn, Ctrl+S versus a bare S, and one-shots firing
+  once rather than once per frame
 - **deploy** — every referenced asset is relative, exists, and loads from no
   other host; `.nojekyll` is present; the bundle is genuinely single-file
 - **docs** — every key the game accepts is documented on the welcome page, and
   every key the page promises exists
+
+The bug that motivated the **input** stage is worth spelling out, because it is
+easy to write again. `event.key` reports the *character produced*, not the key
+pressed: a keydown on A reads `'a'`, but the matching keyup while Shift is held
+reads `'A'`. A held-key map keyed on that never sees the release, so the key
+sticks on — hold A to turn, press Shift to boost, let go of A, and the ship
+turns forever. Caps Lock does the same thing, and arrow keys are immune, which
+is how it survived play-testing. Held state is now keyed by `event.code`, the
+physical key, which is the same on the way up as it was on the way down.
 
 Bugs the suite caught while it was being written, all of them real: the speed cap
 scaling the ship's position instead of its velocity (which read as a teleport to

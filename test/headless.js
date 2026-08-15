@@ -49,6 +49,18 @@ SCRIPTS.forEach((src) => {
 
 const SS = global.SS;
 
+/* The input stage exercises the real keyboard layer, so grab the genuine
+   functions before the stubs below replace them. */
+const REAL_INPUT = {
+  flight: SS.input.flight,
+  firingGun: SS.input.firingGun,
+  showingMap: SS.input.showingMap,
+  takeActions: SS.input.takeActions,
+  clear: SS.input.clear,
+  keyDown: SS.input.handleKeyDown,
+  keyUp: SS.input.handleKeyUp
+};
+
 /* Screens are the only thing the harness has to fake. */
 SS.hud.showText = async () => null;
 SS.hud.menu = async () => null;
@@ -886,6 +898,182 @@ function stageBalance(budget) {
   SS.input.firingGun = () => false;
 }
 
+/* The keyboard.
+ *
+ * This stage exists because of a bug that shipped: holding a WASD key, then
+ * pressing Shift to boost, then releasing the WASD key left the ship turning
+ * or thrusting forever with nothing held down.  `event.key` reports the
+ * character produced, so the keydown said 'a' and the keyup said 'A', and the
+ * held-key map never saw the release.  Arrow keys were immune, which is why
+ * it survived the first round of play-testing.
+ *
+ * Every case below is a way for a key to go down under one set of modifiers
+ * and come up under another. */
+function stageInput() {
+  const K = REAL_INPUT;
+
+  /* an event-shaped object; the real handlers only read these fields */
+  function ev(key, code, mods) {
+    mods = mods || {};
+    return {
+      key: key, code: code,
+      shiftKey: !!mods.shift, ctrlKey: !!mods.ctrl, metaKey: !!mods.meta,
+      preventDefault: function () { this.defaultPrevented = true; },
+      defaultPrevented: false
+    };
+  }
+  const downEv = (key, code, mods) => { const e = ev(key, code, mods); K.keyDown(e); return e; };
+  const upEv = (key, code, mods) => { const e = ev(key, code, mods); K.keyUp(e); return e; };
+
+  function flightString() {
+    const f = K.flight();
+    return (f.left ? 'L' : '.') + (f.right ? 'R' : '.') + (f.forward ? 'F' : '.') +
+           (f.backward ? 'B' : '.') + (f.afterburner ? 'A' : '.');
+  }
+
+  /* ---- the reported bug, in every direction it can happen ------------- */
+
+  const WASD = [
+    { key: 'a', shifted: 'A', code: 'KeyA', field: 'left', what: 'turn left' },
+    { key: 'd', shifted: 'D', code: 'KeyD', field: 'right', what: 'turn right' },
+    { key: 'w', shifted: 'W', code: 'KeyW', field: 'forward', what: 'thrust' },
+    { key: 's', shifted: 'S', code: 'KeyS', field: 'backward', what: 'reverse' }
+  ];
+
+  WASD.forEach((k) => {
+    K.clear();
+    downEv(k.key, k.code);
+    ok(K.flight()[k.field], k.what + ': pressing ' + k.key.toUpperCase() + ' works');
+
+    downEv('Shift', 'ShiftLeft', { shift: true });
+    ok(K.flight().afterburner, k.what + ': Shift engages the afterburner');
+    ok(K.flight()[k.field], k.what + ': still held while boosting');
+
+    /* the browser reports the *shifted* character on the way up */
+    upEv(k.shifted, k.code, { shift: true });
+    ok(!K.flight()[k.field],
+      k.what + ': releasing ' + k.key.toUpperCase() + ' while Shift is held actually releases it');
+
+    upEv('Shift', 'ShiftLeft');
+    eq(flightString(), '.....',
+      k.what + ': nothing is left held after boosting and releasing (' + flightString() + ')');
+  });
+
+  /* Caps Lock produces the same mismatch without Shift ever being touched. */
+  K.clear();
+  downEv('A', 'KeyA');
+  ok(K.flight().left, 'caps lock: A turns left');
+  upEv('A', 'KeyA');
+  ok(!K.flight().left, 'caps lock: A releases');
+
+  /* Arrows were always fine; make sure they stay fine. */
+  K.clear();
+  downEv('ArrowLeft', 'ArrowLeft');
+  downEv('Shift', 'ShiftLeft', { shift: true });
+  upEv('ArrowLeft', 'ArrowLeft', { shift: true });
+  upEv('Shift', 'ShiftLeft');
+  eq(flightString(), '.....', 'arrows: boosting and releasing leaves nothing held');
+
+  /* Both Shift keys, and releasing the other one. */
+  K.clear();
+  downEv('w', 'KeyW');
+  downEv('Shift', 'ShiftLeft', { shift: true });
+  downEv('Shift', 'ShiftRight', { shift: true });
+  upEv('Shift', 'ShiftLeft', { shift: true });
+  ok(K.flight().afterburner, 'holding the other Shift keeps the afterburner lit');
+  upEv('Shift', 'ShiftRight');
+  ok(!K.flight().afterburner, 'releasing both Shifts cuts the afterburner');
+  upEv('W', 'KeyW');
+  eq(flightString(), '.....', 'two-Shift sequence leaves nothing held');
+
+  /* Losing focus mid-turn must not leave the ship rotating. */
+  K.clear();
+  downEv('a', 'KeyA');
+  downEv('Shift', 'ShiftLeft', { shift: true });
+  K.clear();
+  eq(flightString(), '.....', 'clearing on blur releases everything');
+
+  /* ---- one-shots ------------------------------------------------------ */
+
+  K.clear();
+  K.takeActions();
+
+  /* A modifier that comes back up before the frame is read must not change
+     what the press meant. */
+  downEv('Tab', 'Tab', { shift: true });
+  upEv('Tab', 'Tab', { shift: true });
+  upEv('Shift', 'ShiftLeft');
+  let actions = K.takeActions();
+  ok(actions.indexOf('mine') >= 0,
+    'Shift+Tab lays a mine even if Shift is released first (' + actions.join(',') + ')');
+  ok(actions.indexOf('bomb') < 0, 'Shift+Tab is not also read as a bomb');
+
+  K.clear();
+  downEv('Tab', 'Tab');
+  actions = K.takeActions();
+  ok(actions.indexOf('bomb') >= 0, 'plain Tab fires a bomb');
+
+  /* Holding a key must fire its action once, not once per frame. */
+  K.clear();
+  downEv('F5', 'F5');
+  eq(K.takeActions().filter((a) => a === 'decoy').length, 1, 'F5 drops one decoy');
+  downEv('F5', 'F5');                       // auto-repeat: still down
+  eq(K.takeActions().filter((a) => a === 'decoy').length, 0,
+    'holding F5 does not drop a decoy every frame');
+  upEv('F5', 'F5');
+  downEv('F5', 'F5');
+  eq(K.takeActions().filter((a) => a === 'decoy').length, 1, 'releasing and pressing F5 drops another');
+
+  /* Ctrl+S saves, and is not mistaken for the S that means reverse thrust. */
+  K.clear();
+  const ctrlS = downEv('s', 'KeyS', { ctrl: true });
+  actions = K.takeActions();
+  ok(actions.indexOf('save') >= 0, 'Ctrl+S saves (' + actions.join(',') + ')');
+  ok(actions.indexOf('pause') < 0 && actions.indexOf('shipinfo') < 0,
+    'Ctrl+S does not trigger anything else');
+  ok(ctrlS.defaultPrevented, 'Ctrl+S is swallowed, so the browser does not open its save dialog');
+  upEv('s', 'KeyS', { ctrl: true });
+  eq(flightString(), '.....', 'Ctrl+S leaves no key stuck');
+
+  /* Ctrl+R must still reach the browser. */
+  K.clear();
+  const ctrlR = downEv('r', 'KeyR', { ctrl: true });
+  ok(!ctrlR.defaultPrevented, 'Ctrl+R is left to the browser');
+
+  /* Upper and lower case are one command, not two. */
+  K.clear();
+  downEv('P', 'KeyP', { shift: true });
+  ok(K.takeActions().indexOf('pause') >= 0, 'Shift+P still pauses');
+  K.clear();
+  downEv('p', 'KeyP');
+  ok(K.takeActions().indexOf('pause') >= 0, 'p pauses');
+  K.clear();
+  downEv('i', 'KeyI');
+  ok(K.takeActions().indexOf('shipinfo') >= 0, 'i opens the ship readout');
+
+  /* Firing: Ctrl shoots, Shift+Ctrl is a repel and must not also shoot. */
+  K.clear();
+  downEv('Control', 'ControlLeft', { ctrl: true });
+  ok(K.firingGun(), 'Ctrl fires the guns');
+  downEv('Shift', 'ShiftLeft', { shift: true, ctrl: true });
+  ok(!K.firingGun(), 'Shift+Ctrl does not fire the guns');
+  K.clear();
+  downEv(' ', 'Space');
+  ok(K.firingGun(), 'Space fires the guns');
+  upEv(' ', 'Space');
+  ok(!K.firingGun(), 'Space releases');
+
+  /* Alt shows the map and lets go of it. */
+  K.clear();
+  downEv('Alt', 'AltLeft');
+  ok(K.showingMap(), 'Alt shows the whole-sector map');
+  upEv('Alt', 'AltLeft');
+  ok(!K.showingMap(), 'releasing Alt hides it again');
+
+  K.clear();
+  K.takeActions();
+}
+
 /* GitHub Pages serves a project site from https://user.github.io/<repo>/, not
    from a domain root, and it will happily serve a page whose assets all 404.
    Nothing about that failure is visible until someone opens the deployed site,
@@ -1002,6 +1190,7 @@ const STAGES = {
   pilot: stagePilot,
   play: stagePlay,
   balance: stageBalance,
+  input: stageInput,
   deploy: stageDeploy,
   docs: stageDocs
 };
