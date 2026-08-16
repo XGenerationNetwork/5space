@@ -591,6 +591,7 @@ the prizes build on top of it. If it is your first run, take the <strong>Warbird
      file:// path, which is also why this is the classic UMD build rather than
      an ES module. -->
 <script src="vendor/three.min.js"></script>
+<script src="shots/hero-sprites.js"></script>
 <script>
 /* The animated masthead: a 3D "5" turning in front of the sector traffic.
  *
@@ -708,7 +709,9 @@ the prizes build on top of it. If it is your first run, take the <strong>Warbird
   var drifters = [];
   var running = false;
 
-  loader.load('shots/hero-sprites.png', function (sheet) {
+  if (!window.HERO_SHEET) { give_up(); return; }
+
+  loader.load(window.HERO_SHEET, function (sheet) {
     arrived = true;
     sheet.magFilter = THREE.NearestFilter;      // pixel art stays pixel art
     sheet.minFilter = THREE.LinearMipmapLinearFilter;
@@ -851,11 +854,10 @@ the prizes build on top of it. If it is your first run, take the <strong>Warbird
     if (running) frame = window.requestAnimationFrame(draw);
   }
 
-  /* Chrome treats every file:// image as its own origin, so uploading the
-     sprite sheet as a texture throws a SecurityError when the page is opened
-     straight off the filesystem rather than served.  That is a supported way
-     to run this, and an exception once per frame is not an acceptable way to
-     find out - so a failing render retires the band instead. */
+  /* The sheet is a data: URI precisely so this cannot happen any more, but a
+     render can still fail for reasons outside this file - a lost context, a
+     driver giving up - and an exception once per frame is not an acceptable
+     way to find out.  A failing render retires the band instead. */
   function paint() {
     try {
       renderer.render(scene, camera);

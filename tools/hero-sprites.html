@@ -49,14 +49,19 @@
 
   document.body.appendChild(sheet);
   window.SHEET = sheet;
-  window.save = function () {
-    return new Promise(function (res) {
-      sheet.toBlob(function (b) {
-        fetch('http://localhost:8135/__save?name=hero-sprites', { method: 'POST', body: b })
-          .then(function () { res(sheet.width + 'x' + sheet.height + ' ' + b.size); });
-      }, 'image/png');
-    });
-  };
+
+  /* The masthead loads the data: URI, not the .png - see the header of
+     shots/hero-sprites.js for why.  Both come from this one canvas so they
+     cannot drift, and the deploy stage asserts they still match. */
+  window.dataURI = function () { return sheet.toDataURL('image/png'); };
+
+  var note = document.createElement('p');
+  note.style.cssText = 'color:#9fb4cc;font:13px/1.6 monospace;max-width:64ch';
+  note.textContent = 'To regenerate: run dataURI() in the console and write the '
+    + 'result into shots/hero-sprites.js as window.HERO_SHEET, then save this '
+    + 'canvas as shots/hero-sprites.png. The deploy test fails if they differ.';
+  document.body.appendChild(note);
+
   window.READY = true;
 }(window.SS));
 </script>

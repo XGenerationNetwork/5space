@@ -1965,6 +1965,36 @@ function stageDeploy() {
   ok(!/\btype="module"/.test(home),
     'the welcome page uses no module scripts, so file:// still works');
 
+  /* ---- the masthead sheet, and why it is a data: URI ------------------ */
+
+  /* Chrome gives every file:// image its own opaque origin, so uploading one
+     as a WebGL texture throws - which meant the masthead worked when served
+     and quietly retired itself when the page was opened off the filesystem,
+     the one distribution path this project actually promises.  Inlining the
+     sheet fixes it, and these keep it fixed. */
+  const sheetJs = path.join(root, 'shots/hero-sprites.js');
+  const sheetPng = path.join(root, 'shots/hero-sprites.png');
+  ok(fs.existsSync(sheetJs), 'the masthead sheet is inlined as a data: URI');
+  ok(!/loader\.load\('shots\//.test(home),
+    'and the page loads that, not the .png, so file:// cannot taint it');
+
+  if (fs.existsSync(sheetJs) && fs.existsSync(sheetPng)) {
+    const js = fs.readFileSync(sheetJs, 'utf8');
+    const m = js.match(/window\.HERO_SHEET\s*=\s*'data:image\/png;base64,([A-Za-z0-9+/=]+)'/);
+    ok(!!m, 'hero-sprites.js really contains a base64 png data URI');
+    if (m) {
+      const inlined = Buffer.from(m[1], 'base64');
+      const onDisk = fs.readFileSync(sheetPng);
+      /* Two copies of one image is a drift hazard, so it is asserted away
+         rather than trusted: regenerate one without the other and this fails
+         instead of the hero quietly showing last week's ships. */
+      ok(inlined.equals(onDisk),
+        'the inlined sheet and hero-sprites.png are byte-identical');
+      ok(inlined[0] === 0x89 && inlined[1] === 0x50,
+        'and the inlined bytes really are a PNG');
+    }
+  }
+
   /* The script list is the one thing that can drift between the shell, the
      bundler and this harness, so check the files themselves are all there. */
   SCRIPTS.forEach((src) => {

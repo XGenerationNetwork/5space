@@ -121,7 +121,7 @@ frame and snaps to the middle of a firing bucket rather than at the raw bearing.
 
 ```
 index.html          the welcome page (the GitHub Pages front door)
-shots/              screenshots and the masthead sprite sheet
+shots/              screenshots, and the masthead sheet (.png + inlined .js)
 tools/              hero-sprites.html, which regenerates that sheet
 vendor/three.min.js the only third-party code here; masthead only
 play.html           the game's page shell
@@ -370,12 +370,18 @@ Two decisions worth keeping:
 - **The glyph is drawn, not typeset.** A "5" from a font would mean shipping a
   typeface as another asset; it is a hand-defined outline instead, which also
   makes it as angular as the game's own artwork.
-- **The ships are the game's ships.** `shots/hero-sprites.png` is a 4×2 sheet
-  copied straight out of `js/sprites.js` by
-  [`tools/hero-sprites.html`](tools/hero-sprites.html) — open it on the dev
-  server and it posts a fresh sheet. Hand-drawn hero art would drift away from
-  the real ships with nothing ever failing, which is the trap the mobile
-  screenshot fell into once already.
+- **The ships are the game's ships.** A 4×2 sheet copied straight out of
+  `js/sprites.js` by [`tools/hero-sprites.html`](tools/hero-sprites.html).
+  Hand-drawn hero art would drift away from the real ships with nothing ever
+  failing, which is the trap the mobile screenshot fell into once already.
+- **The sheet is inlined as a data: URI**, in `shots/hero-sprites.js`. Chrome
+  gives every `file://` image its own opaque origin, so uploading one as a
+  WebGL texture throws — the masthead worked when served and silently retired
+  itself when the page was opened straight off the filesystem, which is a
+  distribution path this project supports. A data: URI is same-origin
+  everywhere, needs no second request, and cannot half-load.
+  `shots/hero-sprites.png` is the same image kept viewable; `deploy` asserts
+  the two are byte-identical so they cannot drift.
 
 Perspective is the awkward part. Anything parked behind the 5 arrives tiny — the
 first pass put the far lane at about nine pixels — so sizes in the traffic table
