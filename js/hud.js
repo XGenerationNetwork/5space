@@ -29,9 +29,17 @@
     msgbox = document.getElementById('messages');
     banner = document.getElementById('banner');
     document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('pointerdown', function () { gesture++; }, true);
-    /* a fallback for anything without pointer events */
-    document.addEventListener('touchstart', function () { gesture++; }, true);
+    /* One press must count once.  A touch produces pointerdown *and*
+       touchstart, and a mouse produces pointerdown *and* mousedown, so
+       listening for more than one source would count a single press twice -
+       and a panel born between the two would then see a "new" gesture and
+       close itself, which is the exact bug this counter exists to prevent. */
+    if (window.PointerEvent) {
+      document.addEventListener('pointerdown', bumpGesture, true);
+    } else {
+      document.addEventListener('mousedown', bumpGesture, true);
+      document.addEventListener('touchstart', bumpGesture, true);
+    }
   };
 
   /* ------------------------------------------------------------------ */
@@ -58,7 +66,24 @@
    * anything belonging to that gesture or earlier. */
   var gesture = 0;
 
-  function currentGesture() { return gesture; }
+  function bumpGesture() { gesture++; }
+
+  /* Was this click part of the gesture that opened the panel?
+   *
+   * Two independent tests, because either can fail on its own.  The gesture
+   * counter is exact but depends on seeing the press; if some environment
+   * never delivers one, a panel gated on the counter alone could never be
+   * dismissed at all.  So a panel also becomes dismissable on age, which is
+   * wrong for nobody: no real second click arrives within a few hundred
+   * milliseconds of the first. */
+  function sameGestureAsOpen(born) {
+    if (gesture > born.gesture) return false;
+    return (Date.now() - born.at) < 400;
+  }
+
+  function gestureMark() {
+    return { gesture: gesture, at: Date.now() };
+  }
 
   /* The overlay element outlives every panel drawn into it, so its click
      handler has to be owned rather than merely added: exactly one panel is
@@ -234,9 +259,9 @@
        menu with nothing you want on it has no way out without a keyboard.
        Only the backdrop itself: a tap that lands on the menu is a choice, and
        only from a gesture that started after this menu opened. */
-    var bornIn = currentGesture();
+    var born = gestureMark();
     setOverlayClick(function backdrop(ev) {
-      if (currentGesture() <= bornIn) return;
+      if (sameGestureAsOpen(born)) return;
       if (ev.target === overlay) hud.pushKey('Escape');
     });
 
@@ -280,9 +305,9 @@
        screen you cannot get past - is a dead end on a phone.  `click` rather
        than a touch event, so scrolling a long panel does not dismiss it, and
        never the gesture that opened the panel in the first place. */
-    var bornIn = currentGesture();
+    var born = gestureMark();
     setOverlayClick(function dismiss() {
-      if (currentGesture() <= bornIn) return;
+      if (sameGestureAsOpen(born)) return;
       hud.pushKey(' ');
     });
 

@@ -5787,9 +5787,17 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     msgbox = document.getElementById('messages');
     banner = document.getElementById('banner');
     document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('pointerdown', function () { gesture++; }, true);
-    /* a fallback for anything without pointer events */
-    document.addEventListener('touchstart', function () { gesture++; }, true);
+    /* One press must count once.  A touch produces pointerdown *and*
+       touchstart, and a mouse produces pointerdown *and* mousedown, so
+       listening for more than one source would count a single press twice -
+       and a panel born between the two would then see a "new" gesture and
+       close itself, which is the exact bug this counter exists to prevent. */
+    if (window.PointerEvent) {
+      document.addEventListener('pointerdown', bumpGesture, true);
+    } else {
+      document.addEventListener('mousedown', bumpGesture, true);
+      document.addEventListener('touchstart', bumpGesture, true);
+    }
   };
 
   /* ------------------------------------------------------------------ */
@@ -5816,7 +5824,24 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
    * anything belonging to that gesture or earlier. */
   var gesture = 0;
 
-  function currentGesture() { return gesture; }
+  function bumpGesture() { gesture++; }
+
+  /* Was this click part of the gesture that opened the panel?
+   *
+   * Two independent tests, because either can fail on its own.  The gesture
+   * counter is exact but depends on seeing the press; if some environment
+   * never delivers one, a panel gated on the counter alone could never be
+   * dismissed at all.  So a panel also becomes dismissable on age, which is
+   * wrong for nobody: no real second click arrives within a few hundred
+   * milliseconds of the first. */
+  function sameGestureAsOpen(born) {
+    if (gesture > born.gesture) return false;
+    return (Date.now() - born.at) < 400;
+  }
+
+  function gestureMark() {
+    return { gesture: gesture, at: Date.now() };
+  }
 
   /* The overlay element outlives every panel drawn into it, so its click
      handler has to be owned rather than merely added: exactly one panel is
@@ -5992,9 +6017,9 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
        menu with nothing you want on it has no way out without a keyboard.
        Only the backdrop itself: a tap that lands on the menu is a choice, and
        only from a gesture that started after this menu opened. */
-    var bornIn = currentGesture();
+    var born = gestureMark();
     setOverlayClick(function backdrop(ev) {
-      if (currentGesture() <= bornIn) return;
+      if (sameGestureAsOpen(born)) return;
       if (ev.target === overlay) hud.pushKey('Escape');
     });
 
@@ -6038,9 +6063,9 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
        screen you cannot get past - is a dead end on a phone.  `click` rather
        than a touch event, so scrolling a long panel does not dismiss it, and
        never the gesture that opened the panel in the first place. */
-    var bornIn = currentGesture();
+    var born = gestureMark();
     setOverlayClick(function dismiss() {
-      if (currentGesture() <= bornIn) return;
+      if (sameGestureAsOpen(born)) return;
       hud.pushKey(' ');
     });
 
@@ -6470,6 +6495,14 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   input.init = function () {
     window.addEventListener('keydown', onDown, false);
     window.addEventListener('keyup', onUp, false);
+    /* Pointer events carry modifier state too, and they keep arriving while a
+       menu is up - when the keyboard handlers are standing aside - so they
+       are the best chance to notice a modifier that was released off-window. */
+    window.addEventListener('pointerdown', reconcileModifiers, true);
+    window.addEventListener('pointermove', reconcileModifiers, true);
+    /* Coming back to the tab is a clean slate: anything held while we were
+       away was released somewhere we could not see. */
+    window.addEventListener('focus', input.clear);
     /* Any time focus leaves, whatever was held is no longer being held, and
        we will never see its keyup.  Without this, alt-tabbing mid-turn leaves
        the ship rotating. */
@@ -6506,11 +6539,37 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     return !!OWNED[e.key] || e.key.length === 1 || e.key === 'Alt' || e.key === 'Shift';
   }
 
+  /* Modifiers are the one kind of key whose release routinely goes missing.
+   *
+   * Ctrl is the fire button, and it is also the prefix for most of what the
+   * OS and the browser reserve for themselves - Ctrl+Tab, Ctrl+W, Ctrl+Alt+
+   * anything, the Windows key. When one of those is taken, the keyup often
+   * never reaches the page, and a held-key map that only learns from keyup
+   * is left believing the trigger is still down. The ship then fires forever
+   * with nobody touching anything.
+   *
+   * Every keyboard and pointer event carries the true modifier state, so it
+   * costs nothing to reconcile against it continuously and never be wrong for
+   * longer than one event. */
+  function reconcileModifiers(e) {
+    if (e.ctrlKey === false) {
+      delete down.ControlLeft; delete down.ControlRight;
+    }
+    if (e.shiftKey === false) {
+      delete down.ShiftLeft; delete down.ShiftRight;
+    }
+    if (e.altKey === false) {
+      delete down.AltLeft; delete down.AltRight;
+    }
+  }
+  input.reconcileModifiers = reconcileModifiers;
+
   function onDown(e) {
     if (SS.hud.isOpen()) return;      // hud.js owns the keyboard while a menu is up
     if (shouldSwallow(e)) e.preventDefault();
 
     var code = physicalKey(e);
+    reconcileModifiers(e);
     if (down[code]) return;           // ignore auto-repeat
     down[code] = true;
 
@@ -6522,6 +6581,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
   function onUp(e) {
     delete down[physicalKey(e)];
+    reconcileModifiers(e);
   }
 
   /* Exposed so the test suite can drive the handlers with event-shaped

@@ -67,6 +67,14 @@
   input.init = function () {
     window.addEventListener('keydown', onDown, false);
     window.addEventListener('keyup', onUp, false);
+    /* Pointer events carry modifier state too, and they keep arriving while a
+       menu is up - when the keyboard handlers are standing aside - so they
+       are the best chance to notice a modifier that was released off-window. */
+    window.addEventListener('pointerdown', reconcileModifiers, true);
+    window.addEventListener('pointermove', reconcileModifiers, true);
+    /* Coming back to the tab is a clean slate: anything held while we were
+       away was released somewhere we could not see. */
+    window.addEventListener('focus', input.clear);
     /* Any time focus leaves, whatever was held is no longer being held, and
        we will never see its keyup.  Without this, alt-tabbing mid-turn leaves
        the ship rotating. */
@@ -103,11 +111,37 @@
     return !!OWNED[e.key] || e.key.length === 1 || e.key === 'Alt' || e.key === 'Shift';
   }
 
+  /* Modifiers are the one kind of key whose release routinely goes missing.
+   *
+   * Ctrl is the fire button, and it is also the prefix for most of what the
+   * OS and the browser reserve for themselves - Ctrl+Tab, Ctrl+W, Ctrl+Alt+
+   * anything, the Windows key. When one of those is taken, the keyup often
+   * never reaches the page, and a held-key map that only learns from keyup
+   * is left believing the trigger is still down. The ship then fires forever
+   * with nobody touching anything.
+   *
+   * Every keyboard and pointer event carries the true modifier state, so it
+   * costs nothing to reconcile against it continuously and never be wrong for
+   * longer than one event. */
+  function reconcileModifiers(e) {
+    if (e.ctrlKey === false) {
+      delete down.ControlLeft; delete down.ControlRight;
+    }
+    if (e.shiftKey === false) {
+      delete down.ShiftLeft; delete down.ShiftRight;
+    }
+    if (e.altKey === false) {
+      delete down.AltLeft; delete down.AltRight;
+    }
+  }
+  input.reconcileModifiers = reconcileModifiers;
+
   function onDown(e) {
     if (SS.hud.isOpen()) return;      // hud.js owns the keyboard while a menu is up
     if (shouldSwallow(e)) e.preventDefault();
 
     var code = physicalKey(e);
+    reconcileModifiers(e);
     if (down[code]) return;           // ignore auto-repeat
     down[code] = true;
 
@@ -119,6 +153,7 @@
 
   function onUp(e) {
     delete down[physicalKey(e)];
+    reconcileModifiers(e);
   }
 
   /* Exposed so the test suite can drive the handlers with event-shaped

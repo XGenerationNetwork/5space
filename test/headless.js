@@ -1412,6 +1412,47 @@ function stageInput() {
   upEv('W', 'KeyW');
   eq(flightString(), '.....', 'two-Shift sequence leaves nothing held');
 
+  /* ---- modifiers whose release never arrives ------------------------- */
+
+  /* Ctrl is the fire button and also the prefix the OS and browser reserve
+     for themselves.  When one of those combinations is taken, the keyup often
+     never reaches the page - and a held-key map that only learns from keyup
+     is left believing the trigger is still down, so the ship fires forever
+     with nobody touching anything.  Every event carries the true modifier
+     state, so it is reconciled against that continuously. */
+  K.clear();
+  downEv('Control', 'ControlLeft', { ctrl: true });
+  ok(K.firingGun(), 'Ctrl fires');
+  /* the OS swallows Ctrl+W; no keyup for Ctrl ever arrives.  The next event
+     to reach the page reports ctrlKey false. */
+  downEv('a', 'KeyA');
+  ok(!K.firingGun(),
+    'a modifier released off-window is noticed on the next key, not left stuck on');
+  upEv('a', 'KeyA');
+  eq(flightString(), '.....', 'and nothing else is left held');
+
+  K.clear();
+  downEv('Shift', 'ShiftLeft', { shift: true });
+  ok(K.flight().afterburner, 'Shift boosts');
+  upEv('a', 'KeyA');                       // an unrelated event, shift now false
+  ok(!K.flight().afterburner, 'a stuck Shift is released too');
+
+  /* pointer events carry modifier state as well, and keep arriving when the
+     keyboard handlers are standing aside for a menu */
+  K.clear();
+  downEv('Control', 'ControlLeft', { ctrl: true });
+  ok(K.firingGun(), 'Ctrl held');
+  SS.input.reconcileModifiers({ ctrlKey: false, shiftKey: false, altKey: false });
+  ok(!K.firingGun(), 'a pointer event with no modifiers clears a stuck one');
+
+  /* and a modifier genuinely held must survive its own keydown */
+  K.clear();
+  downEv('Control', 'ControlLeft', { ctrl: true });
+  downEv('w', 'KeyW', { ctrl: true });
+  ok(K.firingGun(), 'Ctrl stays down while it is genuinely held');
+  ok(K.flight().forward, 'and the other key registers alongside it');
+  K.clear();
+
   /* Losing focus mid-turn must not leave the ship rotating. */
   K.clear();
   downEv('a', 'KeyA');
@@ -1630,14 +1671,22 @@ function stageInput() {
      in a browser. */
   const hudGesture = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
 
-  ok(/pointerdown[\s\S]{0,120}gesture\+\+/.test(hudGesture),
+  ok(/function bumpGesture\(\) \{ gesture\+\+; \}/.test(hudGesture),
     'a press starts a new gesture');
-  ok(/var bornIn = currentGesture\(\)[\s\S]*?function backdrop[\s\S]*?currentGesture\(\) <= bornIn/
-    .test(hudGesture),
+  /* one press, one count: listening to more than one press source would
+     count a single press twice and re-open the very bug this prevents */
+  eq((hudGesture.match(/addEventListener\('pointerdown', bumpGesture/g) || []).length, 1,
+    'pointer presses are counted from exactly one source');
+  ok(/if \(window\.PointerEvent\)[\s\S]{0,200}else[\s\S]{0,200}touchstart/.test(hudGesture),
+    'with a fallback only where pointer events do not exist');
+  ok(/function backdrop[\s\S]*?sameGestureAsOpen\(born\)/.test(hudGesture),
     'a menu ignores backdrop clicks from the gesture that opened it');
-  ok(/var bornIn = currentGesture\(\)[\s\S]*?function dismiss[\s\S]*?currentGesture\(\) <= bornIn/
-    .test(hudGesture),
+  ok(/function dismiss[\s\S]*?sameGestureAsOpen\(born\)/.test(hudGesture),
     'a text panel ignores the click that opened it');
+  /* and a panel must not become permanently undismissable if the press is
+     never seen, so age is a second, independent way out */
+  ok(/sameGestureAsOpen[\s\S]{0,320}Date\.now\(\) - born\.at/.test(hudGesture),
+    'a panel becomes dismissable on age even if no press is ever observed');
 
   /* One overlay, one handler.  A panel that never closed used to leave its
      listener attached, and it went on cancelling whatever replaced it. */

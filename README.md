@@ -338,6 +338,14 @@ re-arm is spatial rather than a countdown (a timer cannot help when the ship
 has no way to get clear before it expires), and `randomOpenSpot` enforces the
 invariant for every caller that places a ship, not just this one.
 
+**Modifiers are the one key whose release routinely goes missing.** Ctrl is the fire
+button and also the prefix the OS and browser reserve for themselves — Ctrl+Tab,
+Ctrl+W, the Windows key. When one of those is taken the keyup often never reaches
+the page, and a held-key map that only learns from keyup is left believing the
+trigger is still down, so the ship fires forever with nobody touching anything.
+Every keyboard and pointer event carries the true modifier state, so it is
+reconciled against that continuously and is never wrong for longer than one event.
+
 The bug that motivated the **input** stage is worth spelling out, because it is
 easy to write again. `event.key` reports the *character produced*, not the key
 pressed: a keydown on A reads `'a'`, but the matching keyup while Shift is held
