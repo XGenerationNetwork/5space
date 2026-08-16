@@ -285,7 +285,18 @@
     })();
   };
 
-  hud.showText = function (lines, title, footer) {
+  /* `opts` may be a footer string, or { footer, holdSeconds }.
+   *
+   * `holdSeconds` refuses to dismiss the panel for that long.  It exists for
+   * the screen at the end of a run: you die with your hands on the controls,
+   * and the very keypress you were already making would otherwise sweep the
+   * summary away before you had read a word of it.  The wait is shown as a
+   * countdown, because a panel that ignores you without saying why reads as a
+   * crash rather than as a pause. */
+  hud.showText = function (lines, title, opts) {
+    if (typeof opts === 'string') opts = { footer: opts };
+    opts = opts || {};
+
     overlay.classList.remove('hidden');
     overlayOpen = true;
     if (hud.releaseTouch) hud.releaseTouch();
@@ -293,12 +304,31 @@
     var rows = lines.map(function (l) {
       return typeof l === 'string' ? { text: l } : l;
     });
+
+    var readyText = opts.footer || (hud.isTouchDevice()
+      ? '(Tap to continue)' : '(Press any key to continue)');
+    var holdUntil = opts.holdSeconds ? Date.now() + opts.holdSeconds * 1000 : 0;
+    function held() { return Date.now() < holdUntil; }
+    function waitText() {
+      var left = Math.ceil((holdUntil - Date.now()) / 1000);
+      return '(' + left + '…)';
+    }
+
     overlay.innerHTML = '';
     overlay.appendChild(buildMenu(title, rows, {
       full: true,
-      footerText: footer || (hud.isTouchDevice()
-        ? '(Tap to continue)' : '(Press any key to continue)')
+      footerText: held() ? waitText() : readyText
     }));
+
+    var foot = overlay.querySelector('.mfoot');
+    var ticker = null;
+    if (held()) {
+      ticker = window.setInterval(function () {
+        if (!foot) return;
+        foot.textContent = held() ? waitText() : readyText;
+        if (!held()) { window.clearInterval(ticker); ticker = null; }
+      }, 250);
+    }
 
     /* A tap counts as the any-key.  Without this every full-screen text
        panel - the help, the ship readout, the score table, and the death
@@ -308,16 +338,26 @@
     var born = gestureMark();
     setOverlayClick(function dismiss() {
       if (sameGestureAsOpen(born)) return;
+      if (held()) return;
       hud.pushKey(' ');
     });
 
-    return hud.getKey().then(function () {
-      setOverlayClick(null);
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-      overlayOpen = false;
-      return null;
-    });
+    return (function waitForDismiss() {
+      return hud.getKey().then(function () {
+        /* anything pressed too early is discarded, not queued: otherwise the
+           key that killed you would still be waiting when the hold expires */
+        if (held()) {
+          keyQueue.length = 0;
+          return waitForDismiss();
+        }
+        if (ticker) window.clearInterval(ticker);
+        setOverlayClick(null);
+        overlay.classList.add('hidden');
+        overlay.innerHTML = '';
+        overlayOpen = false;
+        return null;
+      });
+    })();
   };
 
   hud.yn = function (prompt, choices, def) {

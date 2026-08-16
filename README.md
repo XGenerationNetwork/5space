@@ -236,6 +236,13 @@ the bottom between them, and only in portrait does it climb above.
 only reason a pause can be undone - and a tap or click anywhere on the game resumes
 it, with buttons excluded so the on-screen Pause control does not toggle twice.
 
+**The end-of-run summary is held for seven seconds.** A run ends with your hands on
+the controls, so the keypress already in flight — the one that was firing, or
+turning — would otherwise sweep the summary away before a word of it had been read.
+Keys pressed during the hold are *discarded* rather than queued, or the key that
+killed you would still be waiting when the hold expired, and the wait is shown as a
+countdown so the screen does not read as a crash.
+
 **A panel must not be closed by the click that opened it.** Both dismissal paths —
 tapping a full-screen panel to continue, tapping a menu backdrop to cancel — are
 listeners on the overlay, and the overlay is already under the pointer when they

@@ -1705,6 +1705,36 @@ function stageInput() {
   gm.over = true; gm.ended = true;
   SS.input.takeActions = () => [];
 
+  /* ---- the end-of-run summary is held long enough to read ------------- */
+
+  /* A run ends with your hands on the controls.  Without a hold, the keypress
+     already in flight - the one that was firing, or turning - dismisses the
+     summary before a word of it has been read. */
+  const hudHold = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
+  const gameHold = fs.readFileSync(path.join(root, 'js/game.js'), 'utf8');
+
+  ok(SS.ENDGAME_HOLD >= 5,
+    'the summary is held for a readable stretch (' + SS.ENDGAME_HOLD + 's)');
+  ok(/showText\([\s\S]{0,140}holdSeconds: SS\.ENDGAME_HOLD/.test(gameHold),
+    'the end-of-run summary asks for that hold');
+  ok(/function held\(\) \{ return Date\.now\(\) < holdUntil; \}/.test(hudHold),
+    'a held panel knows when it is still held');
+  ok(/function dismiss\(\)[\s\S]{0,160}if \(held\(\)\) return;/.test(hudHold),
+    'a click cannot dismiss a held panel');
+  ok(/if \(held\(\)\) \{[\s\S]{0,140}return waitForDismiss\(\);/.test(hudHold),
+    'nor can a key: it is discarded and the panel keeps waiting');
+  /* discarded, not queued - otherwise the key that killed you would still be
+     sitting in the queue when the hold expires and would dismiss it anyway */
+  ok(/if \(held\(\)\) \{\s*\n\s*keyQueue\.length = 0;/.test(hudHold),
+    'keys pressed during the hold are discarded rather than queued up');
+  ok(/waitText|holdUntil - Date\.now/.test(hudHold),
+    'the wait is shown as a countdown, not as an unresponsive screen');
+
+  /* the option is additive: every existing caller passes no third argument,
+     and a bare string must still mean the footer */
+  ok(/if \(typeof opts === 'string'\) opts = \{ footer: opts \};/.test(hudHold),
+    'showText still accepts a plain footer string');
+
   /* ---- a panel is not closed by the click that opened it -------------- */
 
   /* Both dismissal paths - tapping a full-screen panel to continue, and

@@ -22,6 +22,9 @@
 
   SS.VERSION = '1.0';
 
+  /* How long the end-of-run summary refuses to be dismissed, in seconds. */
+  SS.ENDGAME_HOLD = 7;
+
   var game = {
     player: null,
     sector: null,
@@ -786,7 +789,12 @@
       how: game.deathReason, when: Date.now(), won: !!game.won
     });
 
-    await SS.hud.showText(lines, game.won ? 'You made it out.' : 'Wreckage');
+    /* Held for a moment before it will accept a dismissal.  A run ends with
+       your hands on the controls, and without this the keypress already in
+       flight - the one that was firing, or turning - sweeps the summary away
+       before it has been read. */
+    await SS.hud.showText(lines, game.won ? 'You made it out.' : 'Wreckage',
+      { holdSeconds: SS.ENDGAME_HOLD });
     await game.showScores();
     await SS.main.titleScreen();
   };
