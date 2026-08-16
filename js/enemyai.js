@@ -26,7 +26,10 @@
 
     for (i = 0; i < budget.roaming; i++) {
       var def = SS.pickEnemy(depth, { turret: false });
-      var spot = SS.randomOpenSpot(sec, { away: sec.spawn, minDist: 70 });
+      var spot = SS.randomOpenSpot(sec, {
+        away: sec.spawn,
+        minDist: Math.round(70 * SS.diff('spawnDistance', depth))
+      });
       sec.enemies.push(makeEnemy(def, sec, spot.x, spot.y, depth));
     }
 
@@ -248,7 +251,7 @@
        by skill is what stops a shallow sector from collapsing into a dogpile
        the moment you launch, and it gives Stealth something to be better than
        further down. */
-    var detect = prof.detect * (0.5 + 0.5 * e.skill);
+    var detect = prof.detect * (0.5 + 0.5 * e.skill) * SS.diff('enemyDetect', e.depth);
 
     if (player && player.alive) {
       var d = SS.dist(e, player);
@@ -574,7 +577,10 @@
     if (living >= cap) return null;
 
     var def = SS.pickEnemy(depth + (urgent ? 3 : 0), { turret: false, noDrones: urgent });
-    var spot = SS.randomOpenSpot(sec, { away: player, minDist: urgent ? 30 : 60 });
+    var spot = SS.randomOpenSpot(sec, {
+      away: player,
+      minDist: Math.round((urgent ? 30 : 60) * SS.diff('spawnDistance', depth))
+    });
     var e = makeEnemy(def, sec, spot.x, spot.y, depth);
     if (urgent) e.alertTimer = 8;
     sec.enemies.push(e);

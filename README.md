@@ -127,7 +127,7 @@ play.html           the game's page shell
 css/style.css       overlay and menu styling
 js/rng.js           seeded xoshiro128** RNG, vectors, headings, RLE
 js/data/ships.js    the eight hulls and the arena settings
-js/data/difficulty.js  Easy and Normal, as multipliers on six levers
+js/data/difficulty.js  Easy and Normal, as multipliers on eight levers
 js/data/prizes.js   the 28 prize types and the roll tables
 js/data/enemies.js  the pilot roster
 js/sector.js        tiles and procedural sector generation
@@ -160,16 +160,26 @@ charge of dying.
 | | |
 |---|---|
 | **Normal** | One hull, one run, permadeath. The game as designed. |
-| **Easy** | A wing of five hulls. Losing one costs every green it had collected and drops the Prime Flag back into the Core, but the run continues. Fewer and softer pilots, more greens and fewer bad ones, a slower hunt. Scores count for half. |
+| **Easy** | A wing of five hulls. Losing one costs every green it had collected and drops the Prime Flag back into the Core, but the run continues. **More** pilots than Normal in the shallows, but far softer ones that start closer and notice you later. More greens and fewer bad ones. Scores count for half. |
 
 It is the first question a new run asks, on both the "New run" and "random hull"
 paths, and the title screen carries a `d` row showing the current mode so it can be
 seen and changed without starting anything.
 
 The whole table lives in [`js/data/difficulty.js`](js/data/difficulty.js) as
-multipliers on six levers — pilot count, pilot build, pilot skill, green density,
-negative-green rate and reinforcement interval — plus the number of hulls and a
-score multiplier.
+multipliers on eight levers — pilot count, build, skill, notice range and spawn
+distance, green density, negative-green rate and reinforcement interval — plus the
+number of hulls and a score multiplier.  Two of them (count and spawn distance)
+are functions of sector depth rather than flat numbers.
+
+**Easy fields more pilots than Normal, not fewer.**  The first version had 0.6x on
+the reasoning that fewer enemies is easier, which is true and useless: a handful of
+pilots scattered over 256 tiles is not gentle, it is *empty*, and you spend the run
+hunting for something to practise on until the first real fight is the one you were
+not ready for.  So the count goes up (1.6x at sector 1, tapering to 0.75x at the
+Core) and the threat per pilot goes down — weaker builds, worse aim, and a much
+shorter notice range, which is what turns a crowd into a queue of winnable single
+fights rather than a crossfire.
 
 **Every multiplier is 1 on Normal, and every one is applied *after* the random draw
 it scales**, so a Normal run generates precisely the universe it did before the
@@ -183,9 +193,14 @@ Measured with the balance autopilot (lower quartile of survival, 10 seeds):
 
 | sector | Normal | Easy |
 |---|---|---|
-| 1 | 20s, 39 greens | 180s, 109 greens |
-| 8 | 11s, 13 greens | 180s, 104 greens |
-| 18 | 8s, 8 greens | 180s, 107 greens |
+| 1 | 9 pilots, first fight 54s, 1.1 kills | 19 pilots, first fight 24s, 3.6 kills |
+| 4 | 13 pilots, first fight 35s, 0.3 kills | 24 pilots, first fight 16s, 2.8 kills |
+| 12 | 25 pilots, first fight 7s, 0.1 kills | 34 pilots, first fight 10s, 1.8 kills |
+
+Runs ended in a three-minute window, out of ten: sector 1, **8 on Normal against 1
+on Easy**; sector 4, 9 against 0; sector 12, 10 against 3. Easy still costs hulls —
+1.4 of its 5 at sector 1 and 3.2 at sector 12 — it just does not end the run for
+them, and it hands you three times the practice on the way.
 
 Easy still costs hulls — the same autopilot burns 3.1 of its 5 in three minutes at
 sector 18 — it just does not end the run for it.

@@ -185,7 +185,7 @@
     var roaming = 3 + Math.floor(depth * 0.75) + SS.rn2(3);
     var turrets = Math.floor(depth * 0.5) + SS.rn2(2);
     var inBase = Math.floor(depth * 0.45) + (depth > 2 ? 1 : 0);
-    var mult = SS.difficulty().enemies;
+    var mult = SS.diff('enemies', depth);
     return {
       roaming: Math.max(1, Math.round(roaming * mult)),
       inBase: Math.round(inBase * mult),

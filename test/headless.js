@@ -934,7 +934,10 @@ function stageDifficulty(budget) {
       key: (h >>> 0).toString(16) + ':' + sec.greens.length + ':' + sec.enemies.length,
       greens: sec.greens.length,
       pilots: sec.enemies.length,
-      build: sec.enemies.reduce((a, e) => a + e.guns + e.bombs, 0),
+      /* per pilot, not summed: Easy fields more of them, so a total would
+         rise even as each one got weaker */
+      build: sec.enemies.reduce((a, e) => a + e.guns + e.bombs, 0) /
+        Math.max(1, sec.enemies.length),
       skill: sec.enemies.reduce((a, e) => a + e.skill, 0) / Math.max(1, sec.enemies.length)
     };
   }
@@ -954,22 +957,76 @@ function stageDifficulty(budget) {
 
   /* ---- Easy is measurably gentler on every lever ---------------------- */
 
-  let easierPilots = 0, moreGreens = 0, softerPilots = 0, lighterBuilds = 0;
+  /* Easy is gentler per pilot, not thinner on pilots.  A sector with a
+     handful of enemies scattered over 256 tiles is empty rather than easy:
+     a beginner needs something to practise on early and often, so the count
+     goes *up* in the shallows and the threat per pilot goes down. */
+  let moreGreens = 0, softerPilots = 0;
+  let crowdedShallow = 0, shallowCells = 0;
+  let buildEasy = 0, buildNormal = 0;
   seeds.forEach(function (seed) {
     depths.forEach(function (depth) {
       const n = fingerprint(seed, depth, 'normal');
       const e = fingerprint(seed, depth, 'easy');
-      if (e.pilots < n.pilots) easierPilots++;
       if (e.greens > n.greens) moreGreens++;
       if (e.skill < n.skill) softerPilots++;
-      if (e.build <= n.build) lighterBuilds++;
+      buildEasy += e.build;
+      buildNormal += n.build;
+      if (depth <= 5) {
+        shallowCells++;
+        if (e.pilots > n.pilots) crowdedShallow++;
+      }
     });
   });
   const cells = seeds.length * depths.length;
-  ok(easierPilots >= cells - 1, 'Easy sectors hold fewer pilots (' + easierPilots + '/' + cells + ')');
   ok(moreGreens === cells, 'Easy sectors hold more greens (' + moreGreens + '/' + cells + ')');
   ok(softerPilots >= cells - 1, 'Easy pilots are less skilled (' + softerPilots + '/' + cells + ')');
-  ok(lighterBuilds >= cells - 1, 'Easy pilots are less well built (' + lighterBuilds + '/' + cells + ')');
+  ok(crowdedShallow === shallowCells,
+    'Easy shallows hold more pilots to practise on (' + crowdedShallow + '/' + shallowCells + ')');
+
+  /* Compared in aggregate rather than sector by sector: a different mode
+     draws a different mix of hull types, so any single sector can skew.  The
+     mean across the whole sample is what the multiplier actually promises. */
+  ok(buildEasy < buildNormal,
+    'Easy pilots are less well built on average (' + (buildEasy / cells).toFixed(2) +
+    ' vs ' + (buildNormal / cells).toFixed(2) + ' weapon levels per pilot)');
+
+  /* ...and the crowd thins as you descend, or "plenty to shoot at" turns
+     into a wall of fire. */
+  SS.game.difficulty = 'easy';
+  const shallowMult = SS.diff('enemies', 1);
+  const deepMult = SS.diff('enemies', SS.MAXDEPTH);
+  ok(shallowMult > 1, 'Easy sector 1 is busier than Normal (x' + shallowMult.toFixed(2) + ')');
+  ok(deepMult < shallowMult,
+    'the crowd thins with depth (x' + shallowMult.toFixed(2) + ' -> x' + deepMult.toFixed(2) + ')');
+  ok(SS.diff('spawnDistance', 1) < SS.diff('spawnDistance', SS.MAXDEPTH),
+    'and starts closer to you in the shallows');
+  ok(SS.diff('enemyDetect', 1) < 1,
+    'Easy pilots notice you from closer, so a crowd arrives as a queue');
+  SS.game.difficulty = 'normal';
+  eq(SS.diff('enemies', 1), 1, 'Normal takes the plain value from a depth-aware lever');
+  eq(SS.diff('enemies', SS.MAXDEPTH), 1, 'at every depth');
+
+  /* A pilot should actually be within reach of where you arrive. */
+  function nearestPilotToSpawn(seed, depth, mode) {
+    SS.game.difficulty = mode;
+    SS.rng.seed(seed);
+    SS.ship.resetIds(1);
+    const sec = SS.makeSector(depth);
+    let best = Infinity;
+    sec.enemies.forEach(function (e) {
+      const d = SS.dist(sec.spawn, e);
+      if (d < best) best = d;
+    });
+    return best;
+  }
+  let closer = 0;
+  seeds.forEach(function (seed) {
+    if (nearestPilotToSpawn(seed, 1, 'easy') < nearestPilotToSpawn(seed, 1, 'normal')) closer++;
+  });
+  ok(closer >= seeds.length - 1,
+    'on Easy the first fight is closer to where you launch (' + closer + '/' + seeds.length + ')');
+  SS.game.difficulty = 'normal';
 
   SS.game.difficulty = 'easy';
   ok(SS.negativeFactorFor(20) > (function () {
