@@ -1638,6 +1638,51 @@ function stageInput() {
   ok(buttons.length > 10,
     'the touch layer offers the full command set (' + buttons.length + ' buttons)');
 
+  /* ---- the utility stack ---------------------------------------------- */
+
+  /* Six buttons climbing from BOMB, plus PORT outboard of BOOST.  The order
+     is the point: a ladder the thumb learns by position stops working if the
+     rungs are renumbered, so it is pinned here rather than left to whoever
+     next edits the array. */
+  const hudSrc = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
+  const stackBlock = (hudSrc.match(/var STACK = \[[\s\S]*?\];/) || [])[0] || '';
+  ok(!!stackBlock, 'the touch layer declares a utility stack');
+  const stackActs = [];
+  let sm;
+  const stackRe = /\bact: '([a-z]+)'/g;
+  while ((sm = stackRe.exec(stackBlock)) !== null) stackActs.push(sm[1]);
+  eq(stackActs.join(','), 'mine,repel,burst,decoy,multifire,warp',
+    'the stack reads bottom-to-top: mine, repel, burst, decoy, multifire, warp');
+  stackActs.forEach(function (a) {
+    ok(handled[a], 'stacked "' + a + '" names an action game.js handles');
+  });
+  ok(/act: 'portal', label: 'PORT'/.test(hudSrc),
+    'PORT is a pad button rather than only a gear-panel entry');
+
+  /* Every stacked action is still reachable the old way.  Someone who learned
+     the gear panel should not find it emptied out from under them. */
+  const gearBlock = (hudSrc.match(/var GEAR = \[[\s\S]*?\];/) || [])[0] || '';
+  stackActs.concat(['portal']).forEach(function (a) {
+    ok(gearBlock.indexOf("act: '" + a + "'") >= 0,
+      '"' + a + '" is still in the gear panel as well as on the pad');
+  });
+
+  /* The layout has two escape hatches for small screens, and both are easy to
+     delete by accident because nothing fails without them until you hold a
+     phone sideways: the MAP/GEAR/menu column moves off the right edge, and
+     PORT climbs on top of BOOST instead of reaching into the d-pad. */
+  const cssSrc = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8');
+  ok(/#touch\.ttop-left \.ttop/.test(cssSrc),
+    'css can move the MAP/GEAR/menu column off the crowded edge');
+  ok(/#touch\.port-up \.tpad-right \.portal/.test(cssSrc),
+    'css can stack PORT above BOOST on a narrow screen');
+  ok(/classList\.add\('ttop-left'\)/.test(hudSrc) && /classList\.add\('port-up'\)/.test(hudSrc),
+    'layoutTouch actually applies both, rather than the css sitting unused');
+  ok(/flex-wrap:\s*wrap-reverse/.test(cssSrc),
+    'the stack wraps into columns instead of running off the top of the screen');
+  ok(/hud\.controlsOverlap/.test(hudSrc),
+    'the decision is made by measuring overlap, not by a width breakpoint');
+
   /* ---- pause is a place you can leave -------------------------------- */
 
   /* Pausing used to be a one-way trip.  Actions were dispatched only inside
@@ -1850,6 +1895,15 @@ function stageDeploy() {
         page + ' references "' + url + '" relatively, so it survives a /<repo>/ subpath');
       ok(fs.existsSync(path.join(root, url)),
         page + ' references "' + url + '", which exists');
+
+      /* An image referenced but never captured would ship as a broken icon,
+         and a zero-byte placeholder looks identical in the file listing. */
+      if (/\.png$/i.test(url) && fs.existsSync(path.join(root, url))) {
+        const buf = fs.readFileSync(path.join(root, url));
+        ok(buf.length > 2000, url + ' is a real image (' + Math.round(buf.length / 1024) + 'KB)');
+        ok(buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47,
+          url + ' really is a PNG');
+      }
     }
 
     ANCHORS.lastIndex = 0;
@@ -1895,6 +1949,36 @@ function stageDocs() {
   /* every hull, prize and pilot should be introduced somewhere too */
   SS.shipList().forEach((k) => {
     ok(manual.indexOf(SS.SHIPS[k].name) >= 0, 'the manual mentions the ' + SS.SHIPS[k].name);
+  });
+
+  /* The hero shot replaced the ASCII drawing that used to sit under the
+     title.  A drawing degrades to nothing when it breaks; an <img> degrades
+     to a broken-icon box at the very top of the front page, so it is worth
+     asserting it is still referenced and still described.  The `deploy` stage
+     separately proves the file exists and is a real PNG. */
+  const hero = (manual.match(/<div class="hero">[\s\S]*?<\/div>/) || [])[0];
+  ok(!!hero, 'the welcome page still leads with the hero screenshot');
+  if (hero) {
+    ok(/<img\s[^>]*src="shots\/[^"]+\.png"/.test(hero), 'the hero points at a shot in shots/');
+    ok(/alt="[^"]{60,}"/.test(hero), 'the hero has an alt description worth reading');
+    ok(/\bwidth="\d+"[\s\S]*?\bheight="\d+"/.test(hero),
+      'the hero declares its size, so the page does not jump when it loads');
+  }
+  ok(manual.indexOf('<pre class="art">') < 0,
+    'the ASCII placeholder it replaced is gone rather than left underneath');
+
+  /* The annotated screenshots: every pin must have a matching legend entry,
+     or the figure numbers point at nothing. */
+  const frames = manual.match(/<div class="shot-frame">[\s\S]*?<\/div>/g) || [];
+  const legends = manual.match(/<ol class="pins">[\s\S]*?<\/ol>/g) || [];
+  eq(frames.length, 2, 'the welcome page carries both annotated screenshots');
+  eq(legends.length, frames.length, 'each screenshot has a legend');
+  frames.forEach((frame, i) => {
+    const pins = (frame.match(/class="pin"/g) || []).length;
+    const items = (legends[i].match(/<li>/g) || []).length;
+    eq(pins, items, 'figure ' + (i + 1) + ': every pin has a legend entry');
+    ok(pins >= 5, 'figure ' + (i + 1) + ' explains a useful number of things (' + pins + ')');
+    ok(/alt="[^"]{40,}"/.test(frame), 'figure ' + (i + 1) + ' has a real alt description');
   });
 
   /* the data tables should be self-consistent */

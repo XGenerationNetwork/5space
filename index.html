@@ -53,13 +53,22 @@
     text-shadow: 0 0 34px rgba(64,192,240,0.42);
   }
   .tag { color: var(--dim); font-size: 15px; margin: 12px auto 0; max-width: 54ch; }
-  .art {
-    color: var(--faint);
-    font-size: clamp(8px, 1.7vw, 12px);
-    line-height: 1.3;
+  /* The hero shot. Bordered like the annotated figures further down so the
+     page reads as one thing, but with no pins on it - it is the poster, not
+     a diagram, and it should be looked at before it is studied. */
+  .hero {
     margin: 26px 0 4px;
-    white-space: pre;
-    overflow-x: auto;
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #05060a;
+    line-height: 0;
+    box-shadow: 0 0 44px rgba(64,192,240,0.10);
+  }
+  .hero img { display: block; width: 100%; height: auto; }
+  .herocap {
+    color: var(--faint); font-size: 13px; line-height: 1.5;
+    margin: 10px auto 0; max-width: 62ch;
   }
   .play {
     display: inline-block;
@@ -152,6 +161,64 @@
   .hulls td:first-child { font-weight: bold; white-space: nowrap; }
   .legend td:first-child { white-space: nowrap; font-weight: bold; width: 1%; }
 
+  /* ---- annotated screenshots ----------------------------------------- */
+
+  .shot { margin: 0 0 8px; }
+  .shot-frame {
+    position: relative;
+    border: 1px solid var(--edge);
+    border-radius: 6px;
+    overflow: hidden;
+    background: #05060a;
+    line-height: 0;
+  }
+  .shot-frame img { display: block; width: 100%; height: auto; }
+
+  /* Pins are placed in percentages, so they stay on target at every width. */
+  .pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: #1c1404;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 2px rgba(4, 6, 12, 0.9), 0 0 16px rgba(255, 210, 74, 0.55);
+  }
+  .shot figcaption { color: var(--faint); font-size: 12.5px; margin-top: 10px; line-height: 1.5; }
+
+  ol.pins { counter-reset: pin; list-style: none; padding: 0; margin: 16px 0 0; }
+  ol.pins > li {
+    counter-increment: pin;
+    position: relative;
+    padding: 0 0 11px 36px;
+    margin: 0;
+    font-size: 13.5px;
+  }
+  ol.pins > li::before {
+    content: counter(pin);
+    position: absolute; left: 0; top: 0;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: #1c1404;
+    font-size: 12px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+  }
+  ol.pins b { color: #eaf4ff; }
+
+  /* the phone shot is tall and narrow: sit it beside its legend */
+  .phone-figure { display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: 26px; align-items: start; }
+  .phone-figure .pin { width: 21px; height: 21px; font-size: 11px; }
+  @media (max-width: 620px) {
+    .phone-figure { grid-template-columns: 1fr; gap: 10px; }
+    .phone-figure .shot-frame { max-width: 260px; margin: 0 auto; }
+  }
+
   /* ---- callout ------------------------------------------------------- */
 
   .callout {
@@ -187,15 +254,19 @@
   Twenty-six sectors down, take the Prime Flag, fly it back out.
   Dying is permanent.</p>
 
-<pre class="art">
-      ·                    ▓▓▓▓                          ·
-                          ▓▓▓▓▓▓         ◈                       ·
-   ·        ▲                ▓▓             ╔══════╗
-           ╱ ╲   ·                          ║ ····◇║      ·
-     ·    ▼                        ·        ╠═╧══╧═╣
-              ·        ▲you                 ║◇····◇║   ·
-   ◇      ·                    ·            ╚══════╝
-</pre>
+<div class="hero">
+  <img src="shots/core.png" width="1120" height="640"
+       alt="Sector 26, inside the Core vault. The Prime Flag sits on a dark red
+            stand ringed in pulsing red at the centre of the frame. A Warbird is
+            immediately below it, nose up, blue afterburner lit, one second from
+            the pickup. The Core Guardian, bounty 24, is closing from above; two
+            Leviathans hold the right side and bullets are crossing the vault.
+            The status panel reads Warbird, Sector 26, and the energy bar reads
+            1101 of 1550.">
+</div>
+<p class="herocap">The bottom of the chain. The Flag is the easy half &mdash; you
+still have twenty-six sectors to fly back up, and carrying it makes every one of
+them come looking for you.</p>
 
   <a class="play" href="play.html">PLAY</a>
   <p class="nodeps">Runs in the browser, on a desktop or a phone. Nothing to install,
@@ -291,15 +362,49 @@ better.</p>
 
 <h3>On a phone or tablet</h3>
 
-<p>Touch controls appear automatically &mdash; there is nothing to switch on. A d-pad
-sits under your left thumb for turning and thrust, and <strong>FIRE</strong>,
-<strong>BOMB</strong> and <strong>BOOST</strong> under your right. You can hold all
-three at once, and slide a thumb straight from turn onto thrust without lifting it.</p>
+<p>Touch controls appear automatically &mdash; there is nothing to switch on. Two thumb
+zones, and you can hold everything in both at once.</p>
 
-<p><strong>GEAR</strong> opens the rest of the command set &mdash; burst, repel, decoy,
-thor, brick, rocket, mine, portal, warp, multifire, stealth, cloak, X-Radar, antiwarp,
-and the ship and prize readouts. <strong>MAP</strong> shows the whole sector and
-<strong>☰</strong> opens the menu.</p>
+<div class="phone-figure">
+  <figure class="shot">
+    <div class="shot-frame">
+      <img src="shots/mobile.png" width="750" height="1624"
+           alt="5Space running on a phone in portrait: the game fills the screen, with a four-way d-pad under the left thumb and FIRE, BOMB, BOOST and PORT under the right one. A column of six utility buttons - MINE, REPEL, BURST, DECOY, MULTI and WARP - climbs the right edge from BOMB. MAP, GEAR and the menu sit below the corner radar, and the energy bar reads 1069 of 1370 just above the controls.">
+      <span class="pin" style="left:22.7%;top:89.4%">1</span>
+      <span class="pin" style="left:76.7%;top:88.4%">2</span>
+      <span class="pin" style="left:77%;top:83.7%">3</span>
+      <span class="pin" style="left:59.3%;top:90.5%">4</span>
+      <span class="pin" style="left:60%;top:83.2%">5</span>
+      <span class="pin" style="left:77%;top:51.7%">6</span>
+      <span class="pin" style="left:81.6%;top:13.7%">7</span>
+      <span class="pin" style="left:26.7%;top:74.6%">8</span>
+    </div>
+    <figcaption>The real control layer, thrust, fire and mine held down.</figcaption>
+  </figure>
+
+  <ol class="pins">
+    <li><b>Turn and thrust.</b> Left and right rotate; up thrusts, down reverses. You can
+      slide a thumb straight from turning onto thrust without lifting it.</li>
+    <li><b>FIRE.</b> Hold it. It sits under your right thumb, and holding it alongside
+      turning and boosting is the normal way to fly.</li>
+    <li><b>BOMB.</b> One tap, one bomb.</li>
+    <li><b>BOOST.</b> The afterburner. Faster, and it eats the same energy your guns
+      use.</li>
+    <li><b>PORT.</b> Drops a portal beacon here, and warps you back to it later. On a
+      narrow screen it sits above BOOST instead of beside it.</li>
+    <li><b>The utility ladder</b> &mdash; MINE, REPEL, BURST, DECOY, MULTI, WARP, climbing
+      from BOMB in that order. These are the ones you reach for while something is
+      already on top of you, so they are on the pad rather than behind GEAR. Held
+      sideways there is less height to work with and the ladder folds into short
+      columns, but the order never changes.</li>
+    <li><b>MAP, GEAR and the menu.</b> MAP shows the whole sector while held. GEAR still
+      opens the full command set, including everything on the ladder. <strong>☰</strong>
+      pauses into the menu. On a phone held sideways this column moves to the left edge,
+      because the right one is spoken for.</li>
+    <li><b>Energy.</b> In portrait it rides above the controls; turn the phone sideways
+      and it drops to the bottom between your thumbs.</li>
+  </ol>
+</div>
 
 <p><strong>Turn the device sideways.</strong> Portrait works, but landscape shows you
 roughly twice as much of what is coming at you, and in this game that is most of
@@ -307,17 +412,55 @@ staying alive.</p>
 
 <h2>What you are looking at</h2>
 
+<p>A real frame, mid-fight in sector 1, in a Warbird that has been collecting.</p>
+
+<figure class="shot">
+  <div class="shot-frame">
+    <img src="shots/desktop.png" width="1100" height="700"
+         alt="A 5Space game frame: the player's red Warbird at the centre of the screen, enemy ships with bounty numbers, green diamond prizes scattered through open space, a gold ring marking the warp portal down, the corner radar top right, and the energy bar and ship readout along the bottom.">
+    <span class="pin" style="left:45.5%;top:56%">1</span>
+    <span class="pin" style="left:50%;top:91.5%">2</span>
+    <span class="pin" style="left:21%;top:78.5%">3</span>
+    <span class="pin" style="left:56.5%;top:68%">4</span>
+    <span class="pin" style="left:53%;top:27.5%">5</span>
+    <span class="pin" style="left:85.5%;top:31%">6</span>
+    <span class="pin" style="left:34%;top:92.5%">7</span>
+  </div>
+  <figcaption>Captured from the running game, not a mock-up.</figcaption>
+</figure>
+
+<ol class="pins">
+  <li><b>Your ship.</b> Always at the centre &mdash; the camera is locked to you and the
+    sector scrolls past. The flame behind it means the engine is lit; it is pointing
+    where it will shoot, which is not necessarily where it is going.</li>
+  <li><b>Energy.</b> Health, ammunition and afterburner from one pool. It refills on its
+    own. Everything you do is spent from here, and at zero you are gone.</li>
+  <li><b>An enemy pilot,</b> flying one of the same eight ships you had to choose from.
+    The number underneath is its <em>bounty</em> &mdash; how much it has collected, so how
+    dangerous it is and how much it is worth.</li>
+  <li><b>A prize.</b> Every one looks identical; you find out what it was after you take
+    it. Most help, some do not, and the deeper you go the more of the second kind
+    there are.</li>
+  <li><b>The way down.</b> A gold ring marks the warp portal to the next sector. A blue
+    one marks the way back up.</li>
+  <li><b>Radar.</b> Terrain appears once your sweep has covered it and stays drawn.
+    Contacts are live and range-limited &mdash; a stealthed ship is not on it at all.
+    Hold <kbd>Alt</kbd> for the whole sector.</li>
+  <li><b>Ship readout.</b> Hull and sector, gun and bomb level, bounty, the stock of every
+    limited-use item, and which abilities the prizes have given you.</li>
+</ol>
+
+<p>Everything else you will meet out there:</p>
+
 <table class="legend">
   <tr><th>On screen</th><th>Meaning</th></tr>
-  <tr><td style="color:#7dffa8">green diamond</td><td>a prize. You never know which one until you take it &mdash; and some are negative</td></tr>
-  <tr><td style="color:#ffd24a">gold ring</td><td>the warp portal down, to the next sector</td></tr>
   <tr><td style="color:#40c0f0">blue ring</td><td>the warp portal back up. In sector 1 it is the way out</td></tr>
   <tr><td style="color:#2fae70">green pad</td><td>a safe zone. Nothing can hurt you and you recharge three times as fast &mdash; but a timer throws you out after twenty-five seconds</td></tr>
-  <tr><td style="color:#a060ff">purple well</td><td>a wormhole. It pulls you in, faster and faster, then spits you out somewhere else</td></tr>
+  <tr><td style="color:#a060ff">purple well</td><td>a wormhole. It pulls you in, faster and faster, then throws you somewhere else in the sector</td></tr>
   <tr><td style="color:#8899bb">grey plating</td><td>a base. The best prizes are inside, behind doors that open and shut on a timer, guarded by pilots stationed there</td></tr>
   <tr><td style="color:#3a7a8a">blue grid</td><td>an energy screen. You can fly through it; shots cannot pass</td></tr>
   <tr><td style="color:#5a5a66">drifting hull</td><td>a derelict. Fly into it and it breaks open into a burst of prizes</td></tr>
-  <tr><td>number under a ship</td><td>that pilot's bounty. High numbers are pilots who have been collecting</td></tr>
+  <tr><td style="color:#6b6257">brown rock</td><td>an asteroid field. Solid, and you bounce off it with a speed penalty</td></tr>
 </table>
 
 <h2>Choosing a difficulty</h2>

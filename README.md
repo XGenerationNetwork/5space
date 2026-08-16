@@ -10,15 +10,12 @@ network requests once the page has loaded.
 **[index.html](index.html) is the welcome page** — what the game is, how to play,
 and the full control list. This file is the developer documentation.
 
-```
-      ·                    ▓▓▓▓                          ·
-                          ▓▓▓▓▓▓         ◈                       ·
-   ·        ▲                ▓▓             ╔══════╗
-           ╱ ╲   ·                          ║ ····◇║      ·
-     ·    ▼                        ·        ╠═╧══╧═╣
-              ·        ▲you                 ║◇····◇║   ·
-   ◇      ·                    ·            ╚══════╝
-```
+![Sector 26, inside the Core vault: the Prime Flag on its stand under a pulsing
+red ring, a Warbird directly beneath it with the afterburner lit, one second
+from the pickup, while the Core Guardian closes from above and two Leviathans
+hold the right side.](shots/core.png)
+
+*The bottom of the chain. Taking the Flag is the easy half.*
 
 ## Running it
 
@@ -120,6 +117,7 @@ frame and snaps to the middle of a firing bucket rather than at the raw bearing.
 
 ```
 index.html          the welcome page (the GitHub Pages front door)
+shots/              annotated screenshots used by the welcome page
 play.html           the game's page shell
 5space.html         single-file build (node build.js)
 .nojekyll           tells GitHub Pages to skip Jekyll
@@ -208,11 +206,39 @@ sector 18 — it just does not end the run for it.
 ## Touch
 
 On anything reporting a touch screen, an on-screen control layer appears: a d-pad
-under the left thumb, FIRE / BOMB / BOOST under the right, and a GEAR panel holding
-the rest of the command set. `?touch=1` forces it on anywhere, which is how it gets
-tested from a desktop; `?touch=0` forces it off.
+under the left thumb, FIRE / BOMB / BOOST / PORT under the right, a ladder of six
+utility buttons climbing from BOMB — MINE, REPEL, BURST, DECOY, MULTI, WARP — and a
+GEAR panel holding the rest of the command set. `?touch=1` forces it on anywhere,
+which is how it gets tested from a desktop; `?touch=0` forces it off.
 
-Three things about it are less obvious than they look:
+The ladder is the answer to a specific problem: the things you need when something
+is already on top of you were all behind the GEAR toggle, which is two taps and a
+panel covering the screen at exactly the wrong moment. They are duplicated rather
+than moved — everything on the ladder is still in GEAR, because a player who
+learned one route should not find the other emptied out.
+
+Six extra buttons is more than the right-hand edge of a phone actually has, so the
+layout has to give somewhere, and it does that by measuring rather than by
+guessing at breakpoints:
+
+- **The ladder wraps.** It is a flex column with a max-height set from the measured
+  gap between the radar and BOMB. On a tablet that is one clean column of six; on a
+  phone held sideways there is only ~110px of it, and the same column folds into
+  three short ones. The bottom-to-top order is identical either way, because the
+  point of a ladder is that the rungs do not move.
+- **MAP/GEAR/menu yields.** When the ladder and that column genuinely intersect,
+  the infrequent one moves to the left edge under the status readout. It only
+  happens when the ladder cannot otherwise be one column, so a tablet keeps the
+  original arrangement.
+- **PORT climbs.** It sits outboard of BOOST, which on a 375px-wide portrait phone
+  puts it exactly on top of the d-pad's turn-right key. When those two overlap,
+  PORT goes above BOOST instead of beside it.
+
+All three are decided in `layoutTouch` by intersecting bounding boxes, not by a
+width breakpoint, because what actually matters is whether two controls collide —
+and that depends on the safe-area insets and the radar as much as on the width.
+
+Three more things about it are less obvious than they look:
 
 - **Pointer events with per-pointer tracking, not a listener per button.** A single
   press/release handler per button cannot express "this thumb slid from turn-left
@@ -263,6 +289,39 @@ full-screen text panels waited on a keypress, which made the help, the readouts 
 worst — the death screen unrecoverable. So: text entry is a real focused `<input>`
 (17px, because iOS zooms the page in on anything smaller), full-screen panels accept
 a tap as the any-key, and tapping a menu's backdrop is the touch equivalent of Esc.
+
+## The screenshots
+
+`shots/core.png` is the hero shot at the top of this file and of the welcome
+page — sector 26 from inside the vault, the Prime Flag on its stand and a
+Warbird a second under it. `shots/desktop.png` and `shots/mobile.png` are the
+two annotated figures further down the welcome page. None of them are mockups:
+the Core shot is seed 2411 walked to depth 26, and the desktop one is seed 11 on
+sector 3, a Warbird with 26 prizes taken and five live pilots on screen.
+
+The touch layer is DOM, not canvas, so a canvas export cannot see it. The mobile
+shot composites the controls from their live measured geometry — position, size,
+corner radius and font all read back off the running page — which means a button
+that moves in the code moves in the screenshot. Recapture it after changing the
+layout, or the figure quietly starts describing a game that no longer exists.
+
+The Core shot is a composition in exactly one respect, and it is worth being
+straight about it: the player is pinned in place while the vault runs for
+two-thirds of a second so the guards are flying rather than parked, and twelve
+awake Core guards will kill a stationary ship in that time, so he is held alive
+through the wind-up. Everything that is not the player — the guards, their
+bullets, the Flag, the vault, the radar, the numbers — is what the simulation
+produced.
+
+They were captured by running the game headless-ish in a browser, stepping the
+100 Hz loop to a chosen frame, and exporting the canvas — so every number on the
+energy bar, every radar blip and every status line is what the code actually
+produced.
+
+The callouts are HTML pins positioned in percentages over the image, so they stay
+on target at any width, and the `docs` test stage asserts the pin count matches
+the legend item count on both figures — a legend entry can't silently lose its
+pin. `deploy` checks the files are real PNGs and not truncated.
 
 ## Saving
 

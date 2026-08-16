@@ -501,8 +501,24 @@
     { cls: 'tpad-right', buttons: [
       { hold: 'Control', label: 'FIRE', cls: 'fire' },
       { act: 'bomb', label: 'BOMB', cls: 'bomb' },
-      { hold: 'Boost', label: 'BOOST', cls: 'boost' }
+      { hold: 'Boost', label: 'BOOST', cls: 'boost' },
+      { act: 'portal', label: 'PORT', cls: 'portal' }
     ] }
+  ];
+
+  /* The limited-use stock, stacked upward from BOMB so the right thumb can
+     reach it without opening anything.  Listed bottom to top - the column is
+     laid out in reverse, so this array reads the way the buttons look.
+
+     These are all still in GEAR as well.  A duplicate button is cheap; a
+     player who learned one route and cannot find the other is not. */
+  var STACK = [
+    { act: 'mine', label: 'MINE' },
+    { act: 'repel', label: 'REPEL' },
+    { act: 'burst', label: 'BURST' },
+    { act: 'decoy', label: 'DECOY' },
+    { act: 'multifire', label: 'MULTI' },
+    { act: 'warp', label: 'WARP' }
   ];
 
   /* The rest of the command set, behind a toggle so it is available without
@@ -572,6 +588,14 @@
           (b.act ? ' data-act="' + b.act + '"' : '') +
           '>' + b.label + '</button>';
       });
+      if (pad.cls === 'tpad-right') {
+        html += '<div class="tstack" id="tstack">';
+        STACK.forEach(function (s) {
+          html += '<button class="tbtn stack" data-act="' + s.act + '">' +
+            escapeHtml(s.label) + '</button>';
+        });
+        html += '</div>';
+      }
       html += '</div>';
     });
 
@@ -604,6 +628,73 @@
     var w = window.innerWidth, h = window.innerHeight;
     var compact = Math.min(w, h) < 420 || h < 480;
     touchLayer.classList.toggle('compact', compact);
+
+    /* How tall may the utility stack be before it climbs into the radar?
+     *
+     * Six buttons is roughly 290px, which is taller than a phone held
+     * sideways, so on those it has to become two columns.  The ceiling is not
+     * a constant: the radar is 22vmin capped at 190, and the MAP/GEAR/menu
+     * column hangs underneath it, both of which move with the viewport.  So
+     * measure the lowest thing already occupying the right-hand edge and stop
+     * short of it, and let flex-wrap do the rest.
+     *
+     * Setting a max-height rather than choosing a column count keeps the one
+     * decision in one place: change the button size or add a seventh and the
+     * layout still resolves itself. */
+    var stack = touchLayer.querySelector('.tstack');
+    var ttop = touchLayer.querySelector('.ttop');
+    if (stack) {
+      /* The radar is 22vmin capped at 190 against the top right, so that is
+         the hard ceiling.  Everything below it is negotiable.
+
+         The stack is bottom-anchored, so its own rect already reports where
+         the column starts - no need to re-derive the safe-area maths that
+         put it there. */
+      touchLayer.classList.remove('ttop-left');
+      stack.style.maxHeight = '';
+      var floor = stack.getBoundingClientRect().bottom;
+      var radarCeiling = Math.min(h * 0.22, 190) + 32;
+
+      var first = stack.querySelector('.tbtn');
+      var pitch = first ? first.getBoundingClientRect().height + 6 : 48;
+      var wantOneColumn = STACK.length * pitch - 6;
+
+      /* Preference order, and the reason for it: one unbroken column is what
+         the stack is *for* - a fixed ladder the thumb learns by position - so
+         it outranks leaving MAP/GEAR/menu where they were.  But moving that
+         column is still a real change, so it only happens when staying put
+         would actually break the ladder.
+
+         A phone held sideways is about 390px tall, and the radar, six utility
+         buttons, BOMB and FIRE want all of it; there the ladder cannot be one
+         column either way, and it wraps into short columns instead. */
+      var tr = ttop ? ttop.getBoundingClientRect() : null;
+      var underTtop = (tr && tr.height) ? tr.bottom + 10 : radarCeiling;
+
+      if (floor - underTtop >= wantOneColumn) {
+        stack.style.maxHeight = Math.round(floor - underTtop) + 'px';
+      } else {
+        touchLayer.classList.add('ttop-left');
+        stack.style.maxHeight =
+          Math.round(Math.max(pitch, floor - radarCeiling - 10)) + 'px';
+      }
+    }
+
+    /* PORT sits outboard of BOOST, which on a narrow portrait phone walks it
+       straight into the d-pad's turn-right key - 375px of width is not enough
+       for two thumb clusters plus an outrigger.  When they touch, PORT goes
+       above BOOST instead of beside it: still a circle, still the same thumb,
+       still adjacent to the control it belongs with. */
+    var port = touchLayer.querySelector('.tpad-right .portal');
+    var leftPad = touchLayer.querySelector('.tpad-left');
+    if (port && leftPad) {
+      touchLayer.classList.remove('port-up');
+      var clash = [].some.call(leftPad.querySelectorAll('.tbtn'), function (b) {
+        return overlaps(port, b);
+      });
+      if (clash) touchLayer.classList.add('port-up');
+    }
+
     /* tell the renderer how much of the bottom of the screen is thumbs */
     if (SS.render && SS.render.setInsets) {
       var pad = touchLayer.querySelector('.tpad-left');
@@ -616,6 +707,16 @@
       });
     }
   };
+
+  /* Do two laid-out controls share any screen?  Zero-sized elements (the
+     layer is hidden, a menu owns the screen) never count. */
+  function overlaps(a, b) {
+    var r = a.getBoundingClientRect(), s = b.getBoundingClientRect();
+    if (!r.width || !r.height || !s.width || !s.height) return false;
+    return r.left < s.right && s.left < r.right &&
+           r.top < s.bottom && s.top < r.bottom;
+  }
+  hud.controlsOverlap = overlaps;
 
   /* ---- pointer plumbing ------------------------------------------------ */
 

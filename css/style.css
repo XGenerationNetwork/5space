@@ -287,6 +287,38 @@ html, body {
 }
 #touch .tpad-right .bomb { right: 8px; bottom: 118px; width: 86px; height: 52px; }
 #touch .tpad-right .boost { right: 112px; bottom: 20px; width: 68px; height: 68px; border-radius: 34px; }
+/* dropping a portal is a two-hand-free moment, so it sits outboard of boost
+   where the thumb reaches it without crossing fire */
+#touch .tpad-right .portal {
+  right: 188px; bottom: 24px;
+  width: 60px; height: 60px;
+  border-radius: 30px;
+  font-size: 11px;
+}
+
+/* The limited-use stock, climbing away from BOMB.
+   column-reverse so the first button in the array is the lowest one, and
+   wrap so a short landscape phone gets a second column instead of a stack
+   that runs off the top of the screen and under the radar.  The height it is
+   allowed to occupy is measured and set by layoutTouch, because only the
+   running page knows where the radar ends. */
+#touch .tstack {
+  position: absolute;
+  right: 8px;
+  bottom: 176px;
+  display: flex;
+  flex-direction: column-reverse;
+  flex-wrap: wrap-reverse;
+  align-content: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+#touch .tstack .tbtn {
+  position: static;
+  width: 86px;
+  height: 42px;
+  font-size: 11px;
+}
 
 /* Map, gear and menu stack down the right-hand edge, below the radar.
    Anywhere along the top centre they eventually collide with the status
@@ -308,6 +340,25 @@ html, body {
   height: 34px;
   font-size: 12px;
   border-radius: 8px;
+}
+
+/* Narrow portrait: PORT stacks on top of BOOST rather than reaching across
+   the screen into the d-pad.  Set by layoutTouch when the two actually meet. */
+#touch.port-up .tpad-right .portal { right: 116px; bottom: 94px; }
+#touch.compact.port-up .tpad-right .portal { right: 96px; bottom: 80px; }
+
+/* When the utility stack needs the right-hand edge, this column moves to the
+   left one, under the status readout and above the d-pad.  layoutTouch adds
+   the class only when the two actually intersect, so a tablet keeps the
+   original arrangement. */
+#touch.ttop-left .ttop {
+  right: auto;
+  left: calc(env(safe-area-inset-left, 0px) + 10px);
+  top: calc(env(safe-area-inset-top, 0px) + 72px);
+}
+#touch.ttop-left .tgear-panel {
+  right: auto;
+  left: calc(env(safe-area-inset-left, 0px) + 72px);
 }
 
 /* everything else, behind one toggle, opening inward from that column */
@@ -343,6 +394,9 @@ html, body {
 #touch.compact .tpad-right .fire { width: 86px; height: 86px; border-radius: 43px; font-size: 14px; }
 #touch.compact .tpad-right .bomb { bottom: 100px; width: 74px; height: 44px; font-size: 11px; }
 #touch.compact .tpad-right .boost { right: 92px; bottom: 16px; width: 58px; height: 58px; border-radius: 29px; font-size: 11px; }
+#touch.compact .tpad-right .portal { right: 156px; bottom: 20px; width: 50px; height: 50px; border-radius: 25px; font-size: 10px; }
+#touch.compact .tstack { bottom: 150px; gap: 5px; }
+#touch.compact .tstack .tbtn { width: 74px; height: 36px; font-size: 10px; }
 
 #touch.compact .ttop .tbtn { min-width: 52px; height: 30px; font-size: 11px; }
 #touch.compact .tgear-panel {
