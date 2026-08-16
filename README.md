@@ -127,7 +127,7 @@ play.html           the game's page shell
 css/style.css       overlay and menu styling
 js/rng.js           seeded xoshiro128** RNG, vectors, headings, RLE
 js/data/ships.js    the eight hulls and the arena settings
-js/data/difficulty.js  Easy and Normal, as multipliers on eight levers
+js/data/difficulty.js  Easy and Normal, as multipliers on nine levers
 js/data/prizes.js   the 28 prize types and the roll tables
 js/data/enemies.js  the pilot roster
 js/sector.js        tiles and procedural sector generation
@@ -152,10 +152,10 @@ build.js            single-file bundler
 ## Difficulty
 
 The two games this one is made of disagree about exactly one thing, and it is the
-thing a difficulty setting should be about. SubSpace kills you constantly and does
-not care: you respawn, you lose the prizes you were carrying, you go again. NetHack
-kills you once. So the modes are not a damage slider — they are which ancestor is in
-charge of dying.
+thing the modes are built around. SubSpace kills you constantly and does not care:
+you respawn, you lose the prizes you were carrying, you go again. NetHack kills you
+once. So the first question a mode answers is which ancestor is in charge of dying,
+and the rest of the levers follow from that.
 
 | | |
 |---|---|
@@ -167,9 +167,9 @@ paths, and the title screen carries a `d` row showing the current mode so it can
 seen and changed without starting anything.
 
 The whole table lives in [`js/data/difficulty.js`](js/data/difficulty.js) as
-multipliers on eight levers — pilot count, build, skill, notice range and spawn
-distance, green density, negative-green rate and reinforcement interval — plus the
-number of hulls and a score multiplier.  Two of them (count and spawn distance)
+multipliers on nine levers — pilot count, build, skill, notice range and spawn
+distance, damage your shots do, green density, negative-green rate and reinforcement
+interval — plus the number of hulls and a score multiplier.  Two of them (count and spawn distance)
 are functions of sector depth rather than flat numbers.
 
 **Easy fields more pilots than Normal, not fewer.**  The first version had 0.6x on
@@ -193,14 +193,14 @@ Measured with the balance autopilot (lower quartile of survival, 10 seeds):
 
 | sector | Normal | Easy |
 |---|---|---|
-| 1 | 9 pilots, first fight 54s, 1.1 kills | 19 pilots, first fight 24s, 3.6 kills |
-| 4 | 13 pilots, first fight 35s, 0.3 kills | 24 pilots, first fight 16s, 2.8 kills |
-| 12 | 25 pilots, first fight 7s, 0.1 kills | 34 pilots, first fight 10s, 1.8 kills |
+| 1 | 9 pilots, first fight 54s, 1.1 kills | 19 pilots, first fight 24s, **5.3 kills** |
+| 4 | 13 pilots, first fight 35s, 0.3 kills | 24 pilots, first fight 16s, **5.3 kills** |
+| 12 | 25 pilots, first fight 7s, 0.1 kills | 34 pilots, first fight 10s, **7.2 kills** |
 
-Runs ended in a three-minute window, out of ten: sector 1, **8 on Normal against 1
-on Easy**; sector 4, 9 against 0; sector 12, 10 against 3. Easy still costs hulls —
-1.4 of its 5 at sector 1 and 3.2 at sector 12 — it just does not end the run for
-them, and it hands you three times the practice on the way.
+Runs ended in a three-minute window, out of ten: sector 1, **8 on Normal against 0
+on Easy**; sector 4, 9 against 0; sector 12, 10 against 1. Easy still costs hulls —
+0.7 of its 5 at sector 1 and 1.6 at sector 12 — it just does not end the run for
+them, and it hands you roughly five times the practice on the way.
 
 Easy still costs hulls — the same autopilot burns 3.1 of its 5 in three minutes at
 sector 18 — it just does not end the run for it.

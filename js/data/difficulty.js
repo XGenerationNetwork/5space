@@ -1,10 +1,11 @@
 /* 5Space - difficulty.
  *
  * The two games this one is made of disagree about exactly one thing, and it
- * is the thing difficulty should be about.  SubSpace kills you constantly and
- * does not care: you respawn, you lose the prizes you were carrying, you go
- * again.  NetHack kills you once.  So the modes are not a damage slider -
- * they are which of the two ancestors is in charge of dying.
+ * is what the modes are built around.  SubSpace kills you constantly and does
+ * not care: you respawn, you lose the prizes you were carrying, you go again.
+ * NetHack kills you once.  So the first question a mode answers is which of
+ * the two ancestors is in charge of dying - and the rest of the levers follow
+ * from that, including, on Easy, a plain multiplier on what your shots do.
  *
  *   Normal  the roguelike answer.  One hull, one run, permadeath.
  *   Easy    SubSpace's own answer.  A wing of five hulls; losing one costs
@@ -74,6 +75,12 @@
          nearest ones come for you - so a beginner gets a run of winnable
          single fights instead of one crossfire. */
       enemyDetect: 0.55,   // how far off they notice you
+
+      /* Your shots count double, so a pilot takes half the damage to destroy.
+         Applied to the damage rather than to their energy pools, because the
+         pool is also what they spend to shoot - halving it would have quietly
+         changed their firing cadence as well. */
+      damageToEnemies: 2,
       reinforcements: 0.65,// how long between replacements
 
       greens: 1.4,         // how thickly prizes are scattered
@@ -94,6 +101,7 @@
       enemySkill: 1,
       enemyDetect: 1,
       spawnDistance: 1,
+      damageToEnemies: 1,
       greens: 1,
       negativeGreens: 1,
       reinforcements: 1,

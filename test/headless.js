@@ -1037,6 +1037,56 @@ function stageDifficulty(budget) {
   })(), 'Easy meets fewer negative greens');
   SS.game.difficulty = 'normal';
 
+  /* ---- Easy: enemies take half the damage to destroy ------------------ */
+
+  /* Measured on the same pilot with the same energy in both modes, so the
+     only thing that can differ is what a shot does. */
+  /* Both ships sit at the centre of the sector: anywhere outside its bounds
+     counts as solid, and a shot placed there is stopped by "rock" before it
+     can hit anything - which would make every measurement here a silent zero. */
+  function damageAbsorbed(mode, team) {
+    SS.game.difficulty = mode;
+    SS.rng.seed(4242);
+    const world = new SS.Sector(8);
+    const mid = world.size / 2;
+    const shooter = SS.ship.create('warbird', { team: 'player', x: mid, y: mid });
+    const target = SS.makeEnemy(SS.enemyByKey('corsair'), world, mid, mid, 8);
+    const victim = team === 'player' ? shooter : target;
+    victim.energy = 100000;
+    victim.stat.energyCap = 100000;
+    const before = victim.energy;
+    world.shots = [{
+      type: 'bullet', x: victim.x, y: victim.y, vx: 0, vy: 0,
+      owner: team === 'player' ? target.id : shooter.id,
+      team: team === 'player' ? 'enemy' : 'player',
+      level: 1, damage: SS.ARENA.BulletDamageLevel, life: 1, bouncing: false
+    }];
+    SS.weapons.update(world, SS.TICK_DT, [shooter, target], {});
+    return before - victim.energy;
+  }
+
+  const hitNormal = damageAbsorbed('normal', 'enemy');
+  const hitEasy = damageAbsorbed('easy', 'enemy');
+  eq(hitNormal, SS.ARENA.BulletDamageLevel,
+    'on Normal a bullet does exactly its rated damage to a pilot');
+  eq(hitEasy, hitNormal * 2,
+    'on Easy your shots count double, so a pilot takes half the damage to destroy (' +
+    hitEasy + ' vs ' + hitNormal + ')');
+
+  /* It is a lever on *your* shots, not a global softening: what the enemy
+     does to you is identical in both modes.  Asserted as a real number first,
+     because two zeroes would satisfy an equality and prove nothing. */
+  const takenNormal = damageAbsorbed('normal', 'player');
+  const takenEasy = damageAbsorbed('easy', 'player');
+  eq(takenNormal, SS.ARENA.BulletDamageLevel,
+    'enemy fire actually reaches the player in this measurement');
+  eq(takenEasy, takenNormal,
+    'Easy does not change what enemy fire does to you (' + takenEasy + ')');
+
+  eq(SS.difficultyByKey('normal').damageToEnemies, 1,
+    'Normal leaves damage alone');
+  SS.game.difficulty = 'normal';
+
   /* ---- losing a hull -------------------------------------------------- */
 
   const idle = () => ({ forward: false, backward: false, left: false, right: false, afterburner: false });

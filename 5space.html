@@ -1110,10 +1110,11 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 /* 5Space - difficulty.
  *
  * The two games this one is made of disagree about exactly one thing, and it
- * is the thing difficulty should be about.  SubSpace kills you constantly and
- * does not care: you respawn, you lose the prizes you were carrying, you go
- * again.  NetHack kills you once.  So the modes are not a damage slider -
- * they are which of the two ancestors is in charge of dying.
+ * is what the modes are built around.  SubSpace kills you constantly and does
+ * not care: you respawn, you lose the prizes you were carrying, you go again.
+ * NetHack kills you once.  So the first question a mode answers is which of
+ * the two ancestors is in charge of dying - and the rest of the levers follow
+ * from that, including, on Easy, a plain multiplier on what your shots do.
  *
  *   Normal  the roguelike answer.  One hull, one run, permadeath.
  *   Easy    SubSpace's own answer.  A wing of five hulls; losing one costs
@@ -1183,6 +1184,12 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
          nearest ones come for you - so a beginner gets a run of winnable
          single fights instead of one crossfire. */
       enemyDetect: 0.55,   // how far off they notice you
+
+      /* Your shots count double, so a pilot takes half the damage to destroy.
+         Applied to the damage rather than to their energy pools, because the
+         pool is also what they spend to shoot - halving it would have quietly
+         changed their firing cadence as well. */
+      damageToEnemies: 2,
       reinforcements: 0.65,// how long between replacements
 
       greens: 1.4,         // how thickly prizes are scattered
@@ -1203,6 +1210,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       enemySkill: 1,
       enemyDetect: 1,
       spawnDistance: 1,
+      damageToEnemies: 1,
       greens: 1,
       negativeGreens: 1,
       reinforcements: 1,
@@ -3342,9 +3350,22 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     return false;
   }
 
+  /* Every point of damage in the game passes through here, whoever fired it.
+   *
+   * The difficulty multiplier is applied to shots belonging to the player, so
+   * on Easy an enemy takes half the damage to destroy.  Doing it here rather
+   * than by halving enemy energy pools matters: the pool is also what a pilot
+   * spends to shoot, so shrinking it would quietly change how often they can
+   * fire.  This changes exactly what was asked for and nothing else.
+   *
+   * A repelled shot changes hands - `w.team` becomes whoever turned it - so
+   * an enemy bomb you push back is your shot, and counts as yours. */
   function hit(sh, damage, w, cb) {
     if (w.ignoresShields) {
       sh.timer.shields = 0;
+    }
+    if (w.team === 'player') {
+      damage = Math.round(damage * SS.diff('damageToEnemies'));
     }
     var killed = SS.ship.damage(sh, damage, w.owner, null);
     if (cb.onHit) cb.onHit(sh, damage, w, killed);

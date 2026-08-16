@@ -413,9 +413,22 @@
     return false;
   }
 
+  /* Every point of damage in the game passes through here, whoever fired it.
+   *
+   * The difficulty multiplier is applied to shots belonging to the player, so
+   * on Easy an enemy takes half the damage to destroy.  Doing it here rather
+   * than by halving enemy energy pools matters: the pool is also what a pilot
+   * spends to shoot, so shrinking it would quietly change how often they can
+   * fire.  This changes exactly what was asked for and nothing else.
+   *
+   * A repelled shot changes hands - `w.team` becomes whoever turned it - so
+   * an enemy bomb you push back is your shot, and counts as yours. */
   function hit(sh, damage, w, cb) {
     if (w.ignoresShields) {
       sh.timer.shields = 0;
+    }
+    if (w.team === 'player') {
+      damage = Math.round(damage * SS.diff('damageToEnemies'));
     }
     var killed = SS.ship.damage(sh, damage, w.owner, null);
     if (cb.onHit) cb.onHit(sh, damage, w, killed);
