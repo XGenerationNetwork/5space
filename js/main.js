@@ -44,8 +44,19 @@
             (info.shipsLeft > 1 ? ', ' + info.shipsLeft + ' hulls' : ', last hull') + ']'))
       });
     }
+    var mode = SS.DIFFICULTIES[main.storedDifficulty()];
     rows.push({ letter: 'n', selectable: true, value: 'new', text: 'New run' });
     rows.push({ letter: 'r', selectable: true, value: 'random', text: 'New run, random hull' });
+    /* Shown on the front page rather than only inside the new-run flow, so
+       the mode is something you can see and change before committing to
+       anything. */
+    rows.push({
+      letter: 'd', selectable: true, value: 'difficulty',
+      html: 'Difficulty: <span class="hi">' + SS.hud.escapeHtml(mode.name) + '</span> &mdash; ' +
+        SS.hud.escapeHtml(mode.ships > 1
+          ? mode.ships + ' hulls, a lost one costs what it carried'
+          : 'one hull, permadeath')
+    });
     rows.push({ letter: 'i', selectable: true, value: 'import', text: 'Import a run from a file' });
     if (info) rows.push({ letter: 'e', selectable: true, value: 'export', text: 'Export the saved run' });
     rows.push({ letter: 's', selectable: true, value: 'scores', text: 'Top scores' });
@@ -69,6 +80,7 @@
         return;
       case 'new': await main.newRun(false); return;
       case 'random': await main.newRun(true); return;
+      case 'difficulty': await main.chooseDifficulty(); await main.titleScreen(); return;
       case 'import': {
         var ok = await SS.save.importFromFile();
         if (ok) {
@@ -93,9 +105,49 @@
   /* picking a hull                                                     */
   /* ------------------------------------------------------------------ */
 
+  /* The mode last chosen, so the title screen can show it and a run can
+     default to it. */
+  main.storedDifficulty = function () {
+    var stored = '';
+    try { stored = localStorage.getItem('5space.difficulty') || ''; } catch (e) { /* ignore */ }
+    return SS.difficultyByKey(stored).key;
+  };
+
+  /* The mode picker, shared by the title screen and the start of a run.
+     Returns the chosen key, or null if the player backed out. */
+  main.chooseDifficulty = async function () {
+    var current = main.storedDifficulty();
+    var rows = SS.DIFFICULTY_ORDER.map(function (k) {
+      var d = SS.DIFFICULTIES[k];
+      return {
+        letter: d.code, selectable: true, value: k,
+        html: '<span class="shipname"' + (k === current ? ' style="color:#ffd24a"' : '') + '>' +
+          SS.hud.escapeHtml(pad(d.name, 9)) + '</span>' +
+          '<span class="shipstats">' +
+          (d.ships > 1 ? d.ships + ' hulls' : 'one hull, permadeath') +
+          (k === current ? '   (current)' : '') + '</span>' +
+          '<div class="shipblurb">' + SS.hud.escapeHtml(d.blurb) + '</div>' +
+          '<div class="shiphint">' + SS.hud.escapeHtml(d.hint) + '</div>'
+      };
+    });
+    var sel = await SS.hud.menu('Choose a difficulty', rows, {
+      full: true, footerText: '(Choose with a letter, Esc to go back)'
+    });
+    if (!sel || !sel.length) return null;
+    try { localStorage.setItem('5space.difficulty', sel[0]); } catch (e) { /* ignore */ }
+    return sel[0];
+  };
+
   main.newRun = async function (randomize) {
     var stored = '';
     try { stored = localStorage.getItem('5space.name') || ''; } catch (e) { /* ignore */ }
+
+    /* Difficulty comes first.  It is the most consequential choice in the
+       run - it decides whether dying ends it - and asking it third, behind a
+       name prompt, made it easy to miss entirely.  Both new-run paths ask;
+       "random hull" randomises the hull, not the rules. */
+    var difficulty = await main.chooseDifficulty();
+    if (difficulty === null) { await main.titleScreen(); return; }
 
     var name = null;
     if (!randomize) {
@@ -104,33 +156,6 @@
     }
     if (!name) name = stored || 'Pilot';
     try { localStorage.setItem('5space.name', name); } catch (e) { /* ignore */ }
-
-    /* Difficulty is asked before the hull, because it changes what the hull
-       has to survive.  The last choice is remembered, since most people pick
-       one and stay there. */
-    var stored_diff = '';
-    try { stored_diff = localStorage.getItem('5space.difficulty') || ''; } catch (e) { /* ignore */ }
-    var difficulty = SS.difficultyByKey(stored_diff).key;
-
-    if (!randomize) {
-      var drows = SS.DIFFICULTY_ORDER.map(function (k) {
-        var d = SS.DIFFICULTIES[k];
-        return {
-          letter: d.code, selectable: true, value: k,
-          html: '<span class="shipname">' + SS.hud.escapeHtml(pad(d.name, 9)) + '</span>' +
-            '<span class="shipstats">' +
-            (d.ships > 1 ? d.ships + ' hulls' : 'one hull, permadeath') + '</span>' +
-            '<div class="shipblurb">' + SS.hud.escapeHtml(d.blurb) + '</div>' +
-            '<div class="shiphint">' + SS.hud.escapeHtml(d.hint) + '</div>'
-        };
-      });
-      var dsel = await SS.hud.menu('Difficulty', drows, {
-        full: true, footerText: '(Choose with a letter, Esc to go back)'
-      });
-      if (!dsel || !dsel.length) { await main.titleScreen(); return; }
-      difficulty = dsel[0];
-    }
-    try { localStorage.setItem('5space.difficulty', difficulty); } catch (e) { /* ignore */ }
 
     var keys = SS.shipList();
     var shipKey;
@@ -156,9 +181,9 @@
       });
       rows.push({ letter: '*', selectable: true, value: '__random', text: 'Pick a hull at random' });
 
-      var sel = await SS.hud.menu('Choosing a hull for ' + name, rows, {
-        full: true, footerText: '(Choose with a letter, Esc to go back)'
-      });
+      var sel = await SS.hud.menu(
+        'Choosing a hull for ' + name + '  -  ' + SS.DIFFICULTIES[difficulty].name,
+        rows, { full: true, footerText: '(Choose with a letter, Esc to go back)' });
       if (!sel || !sel.length) { await main.titleScreen(); return; }
       shipKey = sel[0] === '__random' ? SS.pick(keys) : sel[0];
     }

@@ -162,6 +162,10 @@ charge of dying.
 | **Normal** | One hull, one run, permadeath. The game as designed. |
 | **Easy** | A wing of five hulls. Losing one costs every green it had collected and drops the Prime Flag back into the Core, but the run continues. Fewer and softer pilots, more greens and fewer bad ones, a slower hunt. Scores count for half. |
 
+It is the first question a new run asks, on both the "New run" and "random hull"
+paths, and the title screen carries a `d` row showing the current mode so it can be
+seen and changed without starting anything.
+
 The whole table lives in [`js/data/difficulty.js`](js/data/difficulty.js) as
 multipliers on six levers — pilot count, pilot build, pilot skill, green density,
 negative-green rate and reinforcement interval — plus the number of hulls and a
