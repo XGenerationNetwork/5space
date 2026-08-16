@@ -131,13 +131,53 @@
 
   game.stop = function () { running = false; };
 
+  game.setPaused = function (v) {
+    if (game.paused === !!v) return;
+    game.paused = !!v;
+    /* Held controls should not survive the pause: a thumb lifted while the
+       game was stopped never produced a release the input layer saw. */
+    if (game.paused && SS.hud.releaseTouch) SS.hud.releaseTouch();
+    SS.msg(game.paused ? 'Paused.' : 'Resumed.');
+  };
+
+  /* Any tap or click on the game itself resumes.  Buttons are excluded so the
+     on-screen Pause control toggles once rather than toggling and immediately
+     un-toggling, and menus are excluded because the hud owns those. */
+  game.installResumeOnTap = function () {
+    window.addEventListener('pointerdown', function (e) {
+      if (!game.paused || !game.started || game.over) return;
+      if (SS.hud.isOpen()) return;
+      if (e.target && e.target.closest && e.target.closest('.tbtn')) return;
+      game.setPaused(false);
+    }, true);
+  };
+
+  /* Does the game read the keyboard and the on-screen controls this frame?
+   *
+   * Deliberately *not* the same question as "does the world advance".  It is
+   * true while paused, which is the whole point: a pause that stops reading
+   * input is a pause you cannot leave.  Actions used to be dispatched only
+   * inside the simulating branch, so pressing P froze the game and then
+   * ignored P, Escape and the menu button forever, and the only way out was
+   * to reload the page.
+   *
+   * Split out so the distinction can be asserted rather than just believed. */
+  game.ownsInput = function () {
+    return game.started && !game.over && !SS.hud.isOpen();
+  };
+
+  game.isSimulating = function () {
+    return game.ownsInput() && !game.paused;
+  };
+
   function frame(nowMs) {
     if (!running) return;
     var dt = (nowMs - lastFrame) / 1000;
     lastFrame = nowMs;
     if (dt > MAX_FRAME) dt = MAX_FRAME;
 
-    var simulating = game.started && !game.over && !game.paused && !SS.hud.isOpen();
+    var live = game.ownsInput();
+    var simulating = game.isSimulating();
 
     if (simulating) {
       accumulator += dt;
@@ -148,12 +188,13 @@
         if (game.over) break;
       }
       SS.render.stepEffects(dt);
-      handleActions();
     } else {
-      /* keep the presentation alive while a menu is up */
+      /* keep the presentation alive while a menu is up or the game is held */
       SS.render.stepEffects(Math.min(dt, 0.05));
       accumulator = 0;
     }
+
+    if (live) handleActions();
 
     SS.render.showFullMap = simulating && SS.input.showingMap();
     if (game.started && game.player) SS.render.draw(game);
@@ -216,7 +257,8 @@
   }
 
   /* The test harness drives the simulation directly rather than through
-     requestAnimationFrame, so one tick is part of the public surface. */
+     requestAnimationFrame, so one tick - and the action dispatch that the
+     frame loop normally calls alongside it - are part of the public surface. */
   game.step = tick;
 
   function allShips() {
@@ -432,12 +474,22 @@
   /* discrete actions                                                   */
   /* ------------------------------------------------------------------ */
 
+  /* What still works while the game is held.  Firing a bomb from a paused
+     game would be a cheat; opening the menu, reading a screen or unpausing is
+     the entire reason input keeps being read. */
+  game.handleActions = function () { handleActions(); };
+
+  var PAUSED_ACTIONS = {
+    pause: 1, menu: 1, help: 1, discoveries: 1, shipinfo: 1, save: 1
+  };
+
   function handleActions() {
     var actions = SS.input.takeActions();
     if (!actions.length) return;
     var p = game.player, sec = game.sector;
 
     for (var i = 0; i < actions.length; i++) {
+      if (game.paused && !PAUSED_ACTIONS[actions[i]]) continue;
       switch (actions[i]) {
         case 'bomb': SS.weapons.fireBomb(p, sec); break;
         case 'mine':
@@ -473,10 +525,7 @@
         case 'stealth': toggle(p, 'stealth'); break;
         case 'xradar': toggle(p, 'xradar'); break;
         case 'antiwarp': toggle(p, 'antiwarp'); break;
-        case 'pause':
-          game.paused = !game.paused;
-          SS.msg(game.paused ? 'Paused.' : 'Resumed.');
-          break;
+        case 'pause': game.setPaused(!game.paused); break;
         case 'save': SS.save.saveGame(); SS.msg('Saved.'); break;
         case 'menu': SS.commands.openMenu(); break;
         case 'help': SS.commands.help(); break;

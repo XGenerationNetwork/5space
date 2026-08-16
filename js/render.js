@@ -156,7 +156,31 @@
 
     drawGauges(game);
     drawStatus(game);
+    if (game.paused) drawPaused();
   };
+
+  /* A held game has to look held, and has to say how to leave.  The message
+     log fades after seven seconds, so "Paused." on its own left the screen
+     looking merely frozen. */
+  function drawPaused() {
+    ctx.fillStyle = 'rgba(4, 6, 12, 0.55)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#eaf4ff';
+    ctx.font = 'bold ' + Math.round(Math.min(46, W * 0.075)) +
+      'px "DejaVu Sans Mono", "Courier New", monospace';
+    ctx.fillText('PAUSED', W / 2, H / 2 - 8);
+
+    ctx.font = font(14);
+    ctx.fillStyle = '#9fb6d0';
+    ctx.fillText(SS.hud.isTouchDevice()
+      ? 'Tap anywhere to resume'
+      : 'Click anywhere, or press P, to resume',
+      W / 2, H / 2 + 26);
+    ctx.fillStyle = '#7f96b0';
+    ctx.fillText('Esc for the menu', W / 2, H / 2 + 48);
+  }
 
   function drawStars() {
     for (var i = 0; i < stars.length; i++) {

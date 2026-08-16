@@ -208,6 +208,7 @@
     SS.render.init();
     SS.input.init();
     SS.hud.setupTouch();
+    SS.game.installResumeOnTap();
 
     window.addEventListener('beforeunload', function () {
       if (SS.game.started && !SS.game.over) SS.save.saveGame();

@@ -232,6 +232,10 @@ rather than tiles scales with it. The gauges and status readout keep out from un
 the thumb pads — which sit in the *corners*, so in landscape the energy bar stays at
 the bottom between them, and only in portrait does it climb above.
 
+**Pause has to be leaveable by tap.** A held game keeps reading input - it is the
+only reason a pause can be undone - and a tap or click anywhere on the game resumes
+it, with buttons excluded so the on-screen Pause control does not toggle twice.
+
 **Every prompt has to be answerable by tap.** A prompt blocks until it is answered,
 so one that only listens for keystrokes is not awkward on a phone, it is a wall. The
 name prompt drew its own caret and read intercepted keys, so nothing was focused, no
@@ -295,6 +299,11 @@ script list comes out of `play.html`, so the two cannot drift apart — and chec
   its own power, that sitting in one does not teleport you repeatedly, that
   pilots pass through instead of piling up in the well, and that one still
   flings you a long way with your momentum intact
+- **pause** — that a held game keeps reading input, so P, Escape and the
+  on-screen menu button still work; that weapons do not fire from it; and that
+  there is a control for it on touch. Pausing was once a one-way trip: actions
+  were dispatched only while the world was advancing, so pressing P froze the
+  game and then ignored every key including P
 - **input** — every way a key can go down under one set of modifiers and come
   up under another: WASD released while Shift is held, Caps Lock, both Shift
   keys, losing focus mid-turn, Ctrl+S versus a bare S, and one-shots firing

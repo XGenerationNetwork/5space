@@ -308,6 +308,8 @@
       function close(result) {
         /* blur first, or the on-screen keyboard outlives the prompt */
         try { input.blur(); } catch (e) { /* ignore */ }
+        /* the overlay outlives this prompt, so its listener must not */
+        overlay.removeEventListener('mousedown', keepFocus);
         overlay.classList.add('hidden');
         overlay.innerHTML = '';
         overlayOpen = false;
@@ -330,12 +332,13 @@
 
       /* Tapping beside the field blurs it, and then Enter and Escape have
          nowhere to go - so any tap on the prompt puts the caret back. */
-      overlay.addEventListener('mousedown', function (e) {
+      function keepFocus(e) {
         if (e.target !== input && !e.target.classList.contains('ebtn')) {
           e.preventDefault();
           focusSoon(input);
         }
-      });
+      }
+      overlay.addEventListener('mousedown', keepFocus);
 
       focusSoon(input);
     });
@@ -390,6 +393,7 @@
   /* The rest of the command set, behind a toggle so it is available without
      eating the screen.  Order follows how often you reach for them. */
   var GEAR = [
+    { act: 'pause', label: 'Pause' },
     { act: 'burst', label: 'Burst' },
     { act: 'repel', label: 'Repel' },
     { act: 'decoy', label: 'Decoy' },

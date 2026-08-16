@@ -1323,6 +1323,21 @@ function stageWormholes(budget) {
 function stageInput() {
   const K = REAL_INPUT;
 
+  /* Every action an on-screen button can fire.  Buttons are declared two
+     ways - as `act:` entries in the pad tables and as `data-act` in the raw
+     markup for the top row - and a check that only knew about one of them
+     silently skipped the menu button. */
+  function touchActions() {
+    const src = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
+    const found = {};
+    let m;
+    const asField = /\bact: '([a-z]+)'/g;
+    while ((m = asField.exec(src)) !== null) found[m[1]] = true;
+    const asMarkup = /data-act="([a-z]+)"/g;
+    while ((m = asMarkup.exec(src)) !== null) found[m[1]] = true;
+    return Object.keys(found);
+  }
+
   /* an event-shaped object; the real handlers only read these fields */
   function ev(key, code, mods) {
     mods = mods || {};
@@ -1525,14 +1540,79 @@ function stageInput() {
   let cm;
   while ((cm = caseRe.exec(dispatched)) !== null) handled[cm[1]] = true;
 
-  const hudSrc = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
-  const actRe = /\bact: '([a-z]+)'/g;
-  let am, buttons = 0;
-  while ((am = actRe.exec(hudSrc)) !== null) {
-    buttons++;
-    ok(handled[am[1]], 'the on-screen "' + am[1] + '" button names an action game.js handles');
-  }
-  ok(buttons > 10, 'the touch layer offers the full command set (' + buttons + ' buttons)');
+  const buttons = touchActions();
+  buttons.forEach(function (a) {
+    ok(handled[a], 'the on-screen "' + a + '" button names an action game.js handles');
+  });
+  ok(buttons.length > 10,
+    'the touch layer offers the full command set (' + buttons.length + ' buttons)');
+
+  /* ---- pause is a place you can leave -------------------------------- */
+
+  /* Pausing used to be a one-way trip.  Actions were dispatched only inside
+     the "simulating" branch of the frame loop, and pausing made that branch
+     false - so P, Escape and the on-screen menu button all stopped being read
+     the moment the game was held, and the only way out was a reload. */
+  const gm = SS.game;
+  SS.rng.seed(808);
+  gm.newGame({ name: 'Held', shipKey: 'warbird', seed: 808 });
+
+  let queued = [];
+  SS.input.takeActions = () => { const a = queued; queued = []; return a; };
+  const press = (a) => { queued.push(a); gm.handleActions(); };
+
+  eq(gm.paused, false, 'a new run is not paused');
+  ok(gm.ownsInput() && gm.isSimulating(), 'a running game reads input and advances');
+
+  press('pause');
+  eq(gm.paused, true, 'pause holds the game');
+  /* The bug itself: the frame loop must keep reading input while paused.
+     Asserting the predicate rather than the symptom, because the symptom was
+     "nothing happens ever again" and there is no state to inspect for it. */
+  ok(gm.ownsInput(), 'a paused game still reads input - this is what a pause you can leave means');
+  ok(!gm.isSimulating(), 'but the world does not advance');
+
+  press('pause');
+  eq(gm.paused, false, 'and pressing it again lets go - the game is not soft-locked');
+  ok(gm.isSimulating(), 'the world advances again');
+
+  /* the actions that must survive a pause, and the ones that must not */
+  press('pause');
+  ok(gm.paused, 'paused again for the next checks');
+  gm.sector.shots = [];
+  press('bomb');
+  press('mine');
+  press('burst');
+  eq((gm.sector.shots || []).length, 0, 'weapons do not fire from a held game');
+
+  let opened = false;
+  const realMenu = SS.commands.openMenu;
+  SS.commands.openMenu = function () { opened = true; return Promise.resolve(); };
+  press('menu');
+  ok(opened, 'the menu still opens while paused');
+  SS.commands.openMenu = realMenu;
+
+  ok(gm.paused, 'and none of that resumed the game by accident');
+  gm.setPaused(false);
+  eq(gm.paused, false, 'setPaused releases it');
+
+  /* an on-screen control for it, or a touch player cannot pause at all */
+  const touchActs = touchActions();
+  ok(touchActs.indexOf('pause') >= 0, 'the on-screen controls include a pause button');
+  ok(touchActs.indexOf('menu') >= 0, 'and a menu button');
+
+  /* tapping the game itself is the other way out */
+  const gameSource = fs.readFileSync(path.join(root, 'js/game.js'), 'utf8');
+  ok(/installResumeOnTap[\s\S]*?pointerdown/.test(gameSource),
+    'a tap or click on the game resumes it');
+  ok(/installResumeOnTap[\s\S]*?closest\('\.tbtn'\)/.test(gameSource),
+    'except on a control, which would toggle the pause straight back');
+  ok(/js\/render\.js/.test(SCRIPTS.join(' ')) &&
+    /function drawPaused/.test(fs.readFileSync(path.join(root, 'js/render.js'), 'utf8')),
+    'and a held game says so on screen');
+
+  gm.over = true; gm.ended = true;
+  SS.input.takeActions = () => [];
 
   /* ---- no keyboard-only dead ends ------------------------------------ */
 
