@@ -4,8 +4,10 @@ A roguelike with [SubSpace](https://en.wikipedia.org/wiki/SubSpace_(video_game))
 flight model. Twenty-six procedurally generated sectors down, take the Prime Flag,
 fly it back out. Dying is the end of the run.
 
-Runs entirely in the browser. No build step, no dependencies, no server, and no
-network requests once the page has loaded.
+Runs entirely in the browser. No build step, no server, and no network requests
+once the page has loaded. The game itself has no dependencies at all; the only
+third-party code in the repository is a vendored copy of three.js, used by the
+animated masthead on the welcome page and by nothing the game does.
 
 **[index.html](index.html) is the welcome page** — what the game is, how to play,
 and the full control list. This file is the developer documentation.
@@ -51,7 +53,9 @@ Everything is committed ready for that:
 - **`.nojekyll` is present**, so Pages serves the files verbatim instead of
   running them through Jekyll.
 - **No external requests at all** — no CDN, no fonts, no analytics. The page and
-  the game work offline once loaded.
+  the game work offline once loaded. three.js is committed under `vendor/` for
+  exactly this reason, and the `deploy` stage asserts both that it is there and
+  that the page still points at it rather than at a CDN.
 - **`5space.html` is committed on purpose.** It is the shareable single-file copy
   and it is served from the site. Rebuild it after changing any game source or it
   goes stale:
@@ -117,7 +121,9 @@ frame and snaps to the middle of a firing bucket rather than at the raw bearing.
 
 ```
 index.html          the welcome page (the GitHub Pages front door)
-shots/              annotated screenshots used by the welcome page
+shots/              screenshots and the masthead sprite sheet
+tools/              hero-sprites.html, which regenerates that sheet
+vendor/three.min.js the only third-party code here; masthead only
 play.html           the game's page shell
 5space.html         single-file build (node build.js)
 .nojekyll           tells GitHub Pages to skip Jekyll
@@ -344,6 +350,37 @@ The callouts are HTML pins positioned in percentages over the image, so they sta
 on target at any width, and the `docs` test stage asserts the pin count matches
 the legend item count on both figures — a legend entry can't silently lose its
 pin. `deploy` checks the files are real PNGs and not truncated.
+
+## The masthead
+
+The band above the title is a three.js scene: an extruded "5" turning in front of
+the sector traffic, with ships, the Prime Flag and greens crossing right to left
+at four depths, and one frozen duel — two ships locked on each other with tracers
+in the air — carried past like a photograph.
+
+It is decoration, and the code treats it as decoration. It removes itself if
+three.js is missing or WebGL will not start; it renders one static frame instead
+of animating under `prefers-reduced-motion`; and it stops entirely when scrolled
+out of view or when the tab is hidden, so an idle background tab costs nothing.
+The page reads identically with the whole band gone, which is why it is
+`aria-hidden` — everything it shows is said in words further down.
+
+Two decisions worth keeping:
+
+- **The glyph is drawn, not typeset.** A "5" from a font would mean shipping a
+  typeface as another asset; it is a hand-defined outline instead, which also
+  makes it as angular as the game's own artwork.
+- **The ships are the game's ships.** `shots/hero-sprites.png` is a 4×2 sheet
+  copied straight out of `js/sprites.js` by
+  [`tools/hero-sprites.html`](tools/hero-sprites.html) — open it on the dev
+  server and it posts a fresh sheet. Hand-drawn hero art would drift away from
+  the real ships with nothing ever failing, which is the trap the mobile
+  screenshot fell into once already.
+
+Perspective is the awkward part. Anything parked behind the 5 arrives tiny — the
+first pass put the far lane at about nine pixels — so sizes in the traffic table
+are *apparent* sizes, how big a thing should look at the 5's own depth, and the
+world size is divided back out by how far away it actually is.
 
 ## Saving
 

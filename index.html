@@ -236,12 +236,36 @@
     color: var(--faint); font-size: 13px;
   }
 
+  /* ---- the animated masthead ----------------------------------------- */
+
+  /* Sized in CSS and never by the canvas attributes, so the WebGL surface can
+     be resized to the device pixel ratio without the layout moving. */
+  .masthead {
+    position: relative;
+    margin: 0 0 8px;
+    height: 300px;
+    border-radius: 10px;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 50% 40%, rgba(64,192,240,0.09), transparent 60%),
+      #04050a;
+  }
+  .masthead canvas { display: block; width: 100%; height: 100%; }
+  /* Feathered edges, so the band reads as a window rather than a box. */
+  .masthead::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg, #06070c 0%, transparent 12%,
+                                transparent 88%, #06070c 100%);
+  }
+  .masthead.dead { display: none; }
+
   @media (max-width: 620px) {
     body { font-size: 14px; }
     .wrap { padding: 0 14px 60px; }
     header { padding: 34px 0 20px; }
     .keyrow { flex-direction: column; gap: 2px; }
     .keyrow kbd { min-width: 0; align-self: flex-start; }
+    .masthead { height: 190px; }
   }
 </style>
 </head>
@@ -249,6 +273,12 @@
 <div class="wrap">
 
 <header>
+  <!-- Decorative: everything it shows is said in words below, so it is hidden
+       from assistive tech rather than described twice. -->
+  <div class="masthead" id="masthead" aria-hidden="true">
+    <canvas id="mastheadgl"></canvas>
+  </div>
+
   <h1>5SPACE</h1>
   <p class="tag">A 1997 space shooter with a roguelike underneath it.
   Twenty-six sectors down, take the Prime Flag, fly it back out.
@@ -556,5 +586,315 @@ the prizes build on top of it. If it is your first run, take the <strong>Warbird
 </footer>
 
 </div>
+
+<!-- Vendored, not fetched: the whole site has to work offline and from a
+     file:// path, which is also why this is the classic UMD build rather than
+     an ES module. -->
+<script src="vendor/three.min.js"></script>
+<script>
+/* The animated masthead: a 3D "5" turning in front of the sector traffic.
+ *
+ * Decorative, and treated that way - it is torn down and hidden if anything
+ * is missing or unwelcome (no WebGL, no three.js, reduced-motion), and the
+ * page reads exactly the same without it.  The screenshot below it is the
+ * real hero; this is the sign over the door.
+ */
+(function () {
+  'use strict';
+
+  var band = document.getElementById('masthead');
+  var canvas = document.getElementById('mastheadgl');
+  if (!band || !canvas) return;
+
+  var arrived = false;
+
+  function give_up() { band.classList.add('dead'); }
+
+  /* Everything below hangs off the sprite sheet arriving.  A load that fails
+     calls back and is handled - but one that simply never resolves does not,
+     and that left an empty 300px box sitting above the title with nothing to
+     say it was broken.
+     The test is whether the sheet turned up, deliberately not whether anything
+     has been drawn: the band does not draw at all while it is scrolled out of
+     view, so watching for a first paint retired a perfectly healthy masthead
+     on any reload that restored the scroll position further down the page. */
+  window.setTimeout(function () {
+    if (!arrived) give_up();
+  }, 4000);
+
+  if (!window.THREE) { give_up(); return; }
+
+  /* Someone who has asked the OS for less movement should not be handed a
+     spinning object as the first thing on the page. */
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
+  } catch (e) { give_up(); return; }
+  if (!renderer || !renderer.getContext()) { give_up(); return; }
+
+  renderer.setClearColor(0x04050a, 1);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(42, 2, 0.1, 200);
+  camera.position.set(0, 0, 15);
+
+  /* ---- the 5 -------------------------------------------------------- */
+
+  /* Drawn as an outline rather than loaded from a font: a typeface would be
+     another asset to fetch, and this way the glyph is as angular as the rest
+     of the game's artwork. Units are a 0.62 x 1.0 box, y up. */
+  function fiveShape() {
+    var s = new THREE.Shape();
+    s.moveTo(0.05, 1.00);
+    s.lineTo(0.60, 1.00);
+    s.lineTo(0.60, 0.81);
+    s.lineTo(0.24, 0.81);
+    s.lineTo(0.24, 0.63);
+    s.lineTo(0.34, 0.63);
+    s.quadraticCurveTo(0.62, 0.62, 0.62, 0.36);
+    s.quadraticCurveTo(0.62, 0.00, 0.28, 0.00);
+    s.quadraticCurveTo(0.13, 0.00, 0.04, 0.08);
+    s.lineTo(0.16, 0.22);
+    s.quadraticCurveTo(0.21, 0.16, 0.28, 0.16);
+    s.quadraticCurveTo(0.45, 0.16, 0.45, 0.36);
+    s.quadraticCurveTo(0.45, 0.46, 0.34, 0.46);
+    s.lineTo(0.05, 0.46);
+    s.closePath();
+    return s;
+  }
+
+  var geo = new THREE.ExtrudeGeometry(fiveShape(), {
+    depth: 0.26, bevelEnabled: true, bevelThickness: 0.035,
+    bevelSize: 0.028, bevelSegments: 3, curveSegments: 18
+  });
+  geo.center();
+  geo.scale(8.2, 8.2, 8.2);
+
+  var five = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    color: 0x2ea8dc, emissive: 0x0a2f45, metalness: 0.65, roughness: 0.28
+  }));
+  scene.add(five);
+
+  scene.add(new THREE.AmbientLight(0x415a75, 1.1));
+  var key = new THREE.DirectionalLight(0x9fe4ff, 2.3); key.position.set(4, 6, 9);
+  var rim = new THREE.DirectionalLight(0xff6a4a, 1.5); rim.position.set(-7, -3, 4);
+  scene.add(key); scene.add(rim);
+
+  /* ---- stars -------------------------------------------------------- */
+
+  var STARS = 520, sxyz = new Float32Array(STARS * 3);
+  for (var i = 0; i < STARS; i++) {
+    sxyz[i * 3]     = (Math.random() - 0.5) * 90;
+    sxyz[i * 3 + 1] = (Math.random() - 0.5) * 40;
+    sxyz[i * 3 + 2] = -6 - Math.random() * 55;
+  }
+  var starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(sxyz, 3));
+  var stars = new THREE.Points(starGeo, new THREE.PointsMaterial({
+    color: 0xbcd8f2, size: 0.16, sizeAttenuation: true,
+    transparent: true, opacity: 0.85, depthWrite: false
+  }));
+  scene.add(stars);
+
+  /* ---- the traffic --------------------------------------------------- */
+
+  /* One sheet, 4x2 cells, drawn by the game's own sprite code.  Cells:
+     0 warbird  1 javelin  2 leviathan  3 weasel  4 spider  5 terrier
+     6 the Prime Flag  7 a green */
+  var COLS = 4, ROWS = 2;
+  var loader = new THREE.TextureLoader();
+  var drifters = [];
+  var running = false;
+
+  loader.load('shots/hero-sprites.png', function (sheet) {
+    arrived = true;
+    sheet.magFilter = THREE.NearestFilter;      // pixel art stays pixel art
+    sheet.minFilter = THREE.LinearMipmapLinearFilter;
+
+    function cellMaterial(index) {
+      var t = sheet.clone();
+      t.needsUpdate = true;
+      t.repeat.set(1 / COLS, 1 / ROWS);
+      t.offset.set((index % COLS) / COLS,
+                   1 - (Math.floor(index / COLS) + 1) / ROWS);
+      return new THREE.MeshBasicMaterial({
+        map: t, transparent: true, depthWrite: false, toneMapped: false
+      });
+    }
+
+    var quad = new THREE.PlaneGeometry(1, 1);
+
+    /* Perspective shrinks anything put behind the 5, and the traffic has to
+       stay readable as *ships* - so sizes here are how big a thing should look
+       at the 5's own depth, and the world size is worked back from how far
+       away it actually is.  Without this the far lane arrived as 9px specks. */
+    function apparent(size, z) { return size * (camera.position.z - z) / 15; }
+
+    function piece(index, size, z) {
+      var m = new THREE.Mesh(quad, cellMaterial(index));
+      var s = apparent(size, z);
+      m.scale.set(s, s, 1);
+      return m;
+    }
+
+    /* Ships, the Flag and a couple of greens, crossing behind the 5 at
+       different depths so the band has some parallax to it. */
+    var TRAFFIC = [
+      { cell: 0, size: 2.9 }, { cell: 1, size: 2.4 }, { cell: 2, size: 3.4 },
+      { cell: 3, size: 2.2 }, { cell: 4, size: 2.6 }, { cell: 5, size: 2.4 },
+      { cell: 6, size: 2.8 }, { cell: 7, size: 1.3 }, { cell: 7, size: 1.1 },
+      { cell: 0, size: 2.0 }, { cell: 2, size: 1.8 }, { cell: 5, size: 2.1 }
+    ];
+    TRAFFIC.forEach(function (t, n) {
+      var depth = -9 - (n % 4) * 8;
+      var m = piece(t.cell, t.size, depth);
+      var span = 30 + Math.abs(depth) * 1.5;
+      m.position.set((n / TRAFFIC.length - 0.5) * span, 0, depth);
+      drifters.push({
+        obj: m,
+        /* nearer things cross faster - the whole point of parallax */
+        speed: 3.4 + (depth + 33) * 0.16,
+        bob: 0.2 + Math.random() * 0.35,
+        phase: Math.random() * 6.28,
+        y: (Math.random() - 0.5) * 9,
+        span: span
+      });
+      scene.add(m);
+    });
+
+    /* The duel: two ships locked at each other with shots in the air between
+       them, frozen mid-exchange and translating as one group.  Nothing about
+       it animates internally - it is a photograph being carried past. */
+    var DUEL_Z = -26;
+    var duel = new THREE.Group();
+    var a = piece(0, 2.6, 0);              // warbird, drawn nose-left
+    a.position.set(3.0, 1.0, 0);
+    var b = piece(3, 2.4, 0);              // weasel, flipped to face it
+    b.scale.x *= -1;
+    b.position.set(-3.0, -1.0, 0);
+    a.rotation.z = -0.22; b.rotation.z = -0.22;
+    duel.add(a); duel.add(b);
+
+    var tracer = new THREE.MeshBasicMaterial({
+      color: 0xffd98a, transparent: true, opacity: 0.95, depthWrite: false
+    });
+    for (var k = 0; k < 4; k++) {
+      var bullet = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.15), tracer);
+      bullet.position.set(-1.7 + k * 1.15, -0.62 + k * 0.45, 0.01);
+      bullet.rotation.z = -0.35;
+      duel.add(bullet);
+    }
+    /* Scaled as a unit so the pair keeps its spacing while still obeying the
+       same "should look this big" rule as everything else. */
+    var ds = apparent(1, DUEL_Z);
+    duel.scale.set(ds, ds, 1);
+    duel.position.z = DUEL_Z;
+    drifters.push({
+      obj: duel, speed: 2.6, bob: 0.15, phase: 1.2, y: 3.6, span: 78,
+      duel: true
+    });
+    scene.add(duel);
+
+    layout();
+    start();
+  }, undefined, function () {
+    /* The sheet is the whole point of the background; without it this is just
+       a spinning number, which is not worth 600KB of renderer. */
+    give_up();
+  });
+
+  /* ---- layout -------------------------------------------------------- */
+
+  function layout() {
+    var w = band.clientWidth, h = band.clientHeight;
+    if (!w || !h) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    /* Pull the camera back on a narrow band so the 5 keeps its margins
+       instead of growing off the top and bottom edges. */
+    camera.position.z = 15 * Math.max(1, 2.6 / camera.aspect);
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', layout);
+  layout();
+
+  /* ---- the loop ------------------------------------------------------ */
+
+  var last = 0, frame = 0, spin = 0;
+
+  function draw(t) {
+    var dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016;
+    last = t;
+
+    spin += dt * 0.55;
+    five.rotation.y = spin;
+    /* A steady nod, so the quarter-turn where the glyph is edge-on still
+       shows some face rather than flattening to a bar. */
+    five.rotation.x = Math.sin(spin * 0.5) * 0.3;
+
+    stars.position.x -= dt * 0.7;
+    if (stars.position.x < -30) stars.position.x += 30;
+
+    for (var i = 0; i < drifters.length; i++) {
+      var d = drifters[i];
+      d.obj.position.x -= d.speed * dt;
+      if (d.obj.position.x < -d.span / 2) d.obj.position.x = d.span / 2;
+      d.obj.position.y = d.y + Math.sin(t / 1000 * d.bob + d.phase) * 0.5;
+      if (!d.duel) d.obj.rotation.z = Math.sin(t / 1000 * d.bob + d.phase) * 0.08;
+    }
+
+    if (!paint()) return;
+    if (running) frame = window.requestAnimationFrame(draw);
+  }
+
+  /* Chrome treats every file:// image as its own origin, so uploading the
+     sprite sheet as a texture throws a SecurityError when the page is opened
+     straight off the filesystem rather than served.  That is a supported way
+     to run this, and an exception once per frame is not an acceptable way to
+     find out - so a failing render retires the band instead. */
+  function paint() {
+    try {
+      renderer.render(scene, camera);
+      return true;
+    } catch (e) {
+      stop();
+      give_up();
+      return false;
+    }
+  }
+
+  function start() {
+    if (running) return;
+    if (still && still.matches) { paint(); return; }
+    running = true;
+    last = 0;
+    frame = window.requestAnimationFrame(draw);
+  }
+
+  function stop() {
+    running = false;
+    if (frame) window.cancelAnimationFrame(frame);
+    frame = 0;
+  }
+
+  /* Nothing spins while it is scrolled away or the tab is in the background:
+     this is decoration, and it should cost nothing when nobody is looking. */
+  if (window.IntersectionObserver) {
+    new window.IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) start(); else stop();
+    }, { threshold: 0.01 }).observe(band);
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stop(); else start();
+  });
+  if (still && still.addEventListener) {
+    still.addEventListener('change', function () { stop(); start(); });
+  }
+}());
+</script>
 </body>
 </html>
