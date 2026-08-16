@@ -180,10 +180,16 @@
      and the base garrisons, which are the dangerous ones, do not appear in
      any number until you have had a few sectors to build a hull. */
   SS.enemyBudget = function (depth) {
+    /* The draws happen first and the difficulty scaling second, so Normal
+       consumes exactly the random stream it always did. */
+    var roaming = 3 + Math.floor(depth * 0.75) + SS.rn2(3);
+    var turrets = Math.floor(depth * 0.5) + SS.rn2(2);
+    var inBase = Math.floor(depth * 0.45) + (depth > 2 ? 1 : 0);
+    var mult = SS.difficulty().enemies;
     return {
-      roaming: 3 + Math.floor(depth * 0.75) + SS.rn2(3),
-      inBase: Math.floor(depth * 0.45) + (depth > 2 ? 1 : 0),
-      turrets: Math.floor(depth * 0.5) + SS.rn2(2)
+      roaming: Math.max(1, Math.round(roaming * mult)),
+      inBase: Math.round(inBase * mult),
+      turrets: Math.round(turrets * mult)
     };
   };
 

@@ -107,7 +107,7 @@
     /* Give the pilot its build.  Positive greens only - an enemy that had
        been prized downwards would just be a worse enemy. */
     if (!bare) {
-      var n = def.prizes + SS.rn2(3);
+      var n = Math.round((def.prizes + SS.rn2(3)) * SS.difficulty().enemyPrizes);
       for (var i = 0; i < n; i++) {
         SS.ship.applyPrize(sh, Math.abs(SS.rollPrize(SS.ship.def(sh), 0)), sec);
       }
@@ -136,7 +136,8 @@
        hull is, and it drives the two things that actually separate a rookie
        from a warlord: how straight they shoot, and how long they take to
        decide to. */
-    sh.skill = SS.clamp((def.difficulty - 1) / (SS.MAXDEPTH - 1), 0, 1);
+    sh.skill = SS.clamp((def.difficulty - 1) / (SS.MAXDEPTH - 1), 0, 1) *
+      SS.difficulty().enemySkill;
     sh.aimJitter = 0;
     sh.jitterTimer = 0;
     sh.reaction = 0;
@@ -162,13 +163,8 @@
   /* per-tick AI                                                        */
   /* ------------------------------------------------------------------ */
 
-  /* Behaviour constants, in tiles. */
-  /* `range` is the distance a pilot tries to hold.  They are short by the
-     standards of most shooters, and deliberately: with only forty firing
-     headings, a bullet aimed as well as the hull allows is still up to 4.5
-     degrees off, which is a clean miss on a ship beyond about twenty tiles.
-     SubSpace gunfights happen close for exactly this reason. */
-  /* `range` is the distance a pilot tries to hold, `gun` and `bomb` are how
+  /* Behaviour constants, in tiles.
+     `range` is the distance a pilot tries to hold, `gun` and `bomb` are how
      far it is willing to shoot.  The ranges are short by the standards of
      most shooters, and deliberately: with only forty firing headings a bullet
      aimed as well as the hull allows is still up to 4.5 degrees off, which is

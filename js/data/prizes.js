@@ -220,7 +220,7 @@
   SS.negativeFactorFor = function (depth) {
     var base = SS.ARENA.PrizeNegativeFactor;
     var f = Math.round(base - (depth - 1) * 0.35);
-    return Math.max(4, f);
+    return Math.max(4, Math.round(f * SS.difficulty().negativeGreens));
   };
 
   /* ------------------------------------------------------------------ */

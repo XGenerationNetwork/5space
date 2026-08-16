@@ -10,10 +10,12 @@
  *   dungeon level  ->  sector, persistent, regenerated never
  *   staircase down ->  warp portal
  *   Amulet of Yendor -> the Prime Flag, in a vault at sector 26
- *   permadeath     ->  permadeath
+ *   permadeath     ->  permadeath, on Normal
  *
  * Take the Flag, carry it back up through twenty-six sectors, and warp out
- * through the top. Dying is the end of the run.
+ * through the top.  On Normal, dying is the end of the run; on Easy you have
+ * a wing of hulls and losing one costs you everything it had collected, which
+ * is SubSpace's own answer to the same question.  See data/difficulty.js.
  */
 (function (SS) {
   'use strict';
@@ -27,6 +29,8 @@
     depth: 1,
     maxDepthReached: 1,
     seed: 0,
+    difficulty: 'normal',
+    shipsLeft: 1,
     points: 0,
     elapsed: 0,
     kills: {},
@@ -54,6 +58,11 @@
   /* ------------------------------------------------------------------ */
 
   game.newGame = function (opts) {
+    /* Set before anything is generated: sector layout, pilot builds and the
+       green table all read the mode straight off the run. */
+    game.difficulty = SS.difficultyByKey(opts.difficulty).key;
+    game.shipsLeft = SS.difficulty().ships;
+
     game.seed = opts.seed || ((Date.now() ^ (Math.random() * 0x100000000)) >>> 0);
     SS.rng.seed(game.seed);
     SS.ship.resetIds(1);
@@ -101,6 +110,10 @@
     var def = SS.SHIPS[opts.shipKey];
     SS.msgBig('Sector 1', '#9fd6ff');
     SS.msg('You launch in a ' + def.name + '. Find the warp portal and go down.');
+    if (game.shipsLeft > 1) {
+      SS.msg('Easy: a wing of ' + game.shipsLeft + ' hulls. Losing one costs ' +
+        'you everything it was carrying.', '#9fd6ff');
+    }
     SS.msg('Green diamonds are prizes. You will not know what one is until you take it.');
   };
 
@@ -409,7 +422,7 @@
 
   function trickleReinforcements(sec, dt) {
     game.spawnTimer = (game.spawnTimer || 0) + dt;
-    var interval = game.player.hasFlag ? 4.0 : 18.0;
+    var interval = (game.player.hasFlag ? 4.0 : 18.0) * SS.difficulty().reinforcements;
     if (game.spawnTimer < interval) return;
     game.spawnTimer = 0;
     SS.spawnWanderer(sec, sec.depth, game.player, game.player.hasFlag);
@@ -569,17 +582,61 @@
 
   game.death = function (killerId) {
     if (game.over) return;
-    game.over = true;
+    var p = game.player;
     var killer = null;
     for (var i = 0; i < game.sector.enemies.length; i++) {
       if (game.sector.enemies[i].id === killerId) killer = game.sector.enemies[i];
     }
+    SS.render.explosion(p.x, p.y, 5, '#ffaa55');
+    p.deaths++;
+
+    /* With hulls to spare this is SubSpace's death rather than NetHack's: you
+       lose the ship and everything the greens had built on it, and you go
+       again.  That loss is the whole penalty and it is a real one - a hull
+       stripped back to factory in sector 19 is in serious trouble. */
+    if (game.shipsLeft > 1) {
+      game.shipsLeft--;
+      respawnPlayer(killer);
+      return;
+    }
+
+    game.shipsLeft = 0;
+    game.over = true;
     game.killer = killer ? killer.name : null;
     game.deathReason = killer
       ? 'shot down by ' + SS.anArticle(killer.name)
       : 'destroyed in sector ' + game.depth;
-    SS.render.explosion(game.player.x, game.player.y, 5, '#ffaa55');
   };
+
+  function respawnPlayer(killer) {
+    var p = game.player;
+    var sec = game.sector;
+
+    /* The Flag does not come back with you.  It returns to the vault it came
+       from, so the climb has to be done again - the one part of a run that
+       spare hulls do not soften. */
+    if (p.hasFlag) {
+      p.hasFlag = false;
+      game.flagTaken = false;
+      SS.msgBig('The Prime Flag falls back to the Core.', '#ff8888');
+    }
+
+    SS.ship.resetToInitial(p);
+    var spot = sec.portalUp || sec.spawn || SS.randomOpenSpot(sec, {});
+    p.x = spot.x; p.y = spot.y;
+    p.vx = p.vy = 0;
+    p.inWormhole = false;
+    p.timer.spawnGuard = SS.ARENA.EnterDelay + 1.0;
+
+    SS.radar.revealAround(sec, p.x, p.y, 20);
+    SS.msgBig(game.shipsLeft + ' ' + SS.plural(game.shipsLeft, 'hull') + ' left',
+      '#ffaa66');
+    SS.msg(killer
+      ? 'Shot down by ' + SS.anArticle(killer.name) + '. A fresh hull launches.'
+      : 'Your hull is lost. A fresh one launches.', '#ffaa66');
+    SS.msg('Everything the greens had built is gone with it.', '#ff9a6a');
+    SS.save.saveGame();
+  }
 
   game.win = function () {
     if (game.over) return;
@@ -603,6 +660,7 @@
     score += game.greensTaken * 6;
     score += Math.round(p.bounty) * 25;
     if (game.won) score = score * 2 + 25000;
+    score *= SS.difficulty().scoreMultiplier;
     return Math.max(0, Math.round(score));
   };
 
@@ -644,12 +702,17 @@
     }
 
     lines.push({ text: '  ' + p.name + ' the ' + SS.rankTitle(score) +
-      ', flying a ' + SS.ship.def(p).name + '.' });
+      ', flying a ' + SS.ship.def(p).name +
+      ' on ' + SS.difficulty().name + '.' });
     lines.push({ text: '  ' + SS.capitalize(game.deathReason || 'lost') +
       ' with ' + SS.commify(score) + ' points, after ' + SS.clockString(game.elapsed) + '.' });
     lines.push({ text: '  Reached sector ' + game.maxDepthReached + ' of ' + SS.MAXDEPTH +
       ', took ' + game.greensTaken + ' greens, and shot down ' + p.kills +
       ' ' + SS.plural(p.kills, 'pilot') + '.' });
+    if (p.deaths > 0) {
+      lines.push({ text: '  Lost ' + p.deaths + ' ' + SS.plural(p.deaths, 'hull') +
+        ' along the way.' });
+    }
     lines.push({ text: '' });
 
     var killList = Object.keys(game.kills);
@@ -667,7 +730,7 @@
     SS.commands.readoutLines(p).forEach(function (l) { lines.push(l); });
 
     SS.save.addScore({
-      name: p.name, ship: p.shipKey, score: score,
+      name: p.name, ship: p.shipKey, score: score, difficulty: game.difficulty,
       depth: game.depth, maxDepth: game.maxDepthReached,
       kills: p.kills, greens: game.greensTaken,
       seconds: Math.round(game.elapsed),
@@ -689,6 +752,8 @@
           padRight(SS.commify(s.score), 9) +
           s.name + ' the ' + SS.rankTitle(s.score) +
           ', ' + (SS.SHIPS[s.ship] ? SS.SHIPS[s.ship].name : s.ship) +
+          (s.difficulty && s.difficulty !== 'normal'
+            ? ' [' + SS.difficultyByKey(s.difficulty).name + ']' : '') +
           ' - ' + s.how + ' (sector ' + s.maxDepth + ')'
       });
     });

@@ -754,8 +754,12 @@
      way a zone seeds its map. */
   function scatterGreens(sec, depth) {
     var open = countOpen(sec);
+    /* Clamp first, scale second.  Widening the clamp to make room for a
+       difficulty multiplier would change the figure Normal has always used,
+       and with it every sector Normal generates. */
     var want = Math.round((open / 1000) * SS.ARENA.PrizeFactor);
     want = SS.clamp(want, 60, 460);
+    want = Math.round(want * SS.difficulty().greens);
     var placed = 0, attempts = 0;
     while (placed < want && attempts++ < want * 40) {
       var x = SS.rn1(SIZE - 16, 8), y = SS.rn1(SIZE - 16, 8);

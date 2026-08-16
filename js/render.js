@@ -640,6 +640,7 @@
 
     var lines = [];
     lines.push({ text: def.name + '  -  Sector ' + game.sector.depth +
+      (game.shipsLeft > 1 ? '  -  ' + game.shipsLeft + ' hulls' : '') +
       (game.player.hasFlag ? '  [PRIME FLAG]' : ''), color: '#cfe4ff' });
     lines.push({ text: 'Guns ' + p.guns + '   Bombs ' + (p.bombs || '-') +
       (p.mines ? '   Mines ' + p.mines : '') +
@@ -684,6 +685,7 @@
     var def = SS.ship.def(p);
 
     var first = def.name + '  S' + game.sector.depth +
+      (game.shipsLeft > 1 ? '  x' + game.shipsLeft : '') +
       '  G' + p.guns + (p.bombs ? ' B' + p.bombs : '') +
       '  ' + Math.round(p.bounty) + 'pts' +
       (p.hasFlag ? '  [FLAG]' : '');

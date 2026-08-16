@@ -898,6 +898,181 @@ function stageBalance(budget) {
   SS.input.firingGun = () => false;
 }
 
+/* Difficulty.
+ *
+ * The load-bearing requirement is not that Easy is easier - it is that
+ * Normal is *unchanged*.  Every multiplier is 1 on Normal and every one is
+ * applied after the random draw it scales, so a Normal run generates exactly
+ * the universe it generated before difficulty existed.  Getting that wrong
+ * is silent: sectors would still be valid, just different, and only a
+ * fingerprint catches it. */
+function stageDifficulty(budget) {
+  /* ---- Normal is the identity ----------------------------------------- */
+
+  const normal = SS.DIFFICULTIES.normal;
+  ['enemies', 'enemyPrizes', 'enemySkill', 'greens', 'negativeGreens',
+    'reinforcements', 'scoreMultiplier'].forEach(function (k) {
+    eq(normal[k], 1, 'Normal leaves ' + k + ' alone');
+  });
+  eq(normal.ships, 1, 'Normal is one hull, permadeath');
+  ok(SS.DIFFICULTIES.easy.ships > 1, 'Easy flies a wing of hulls');
+  SS.DIFFICULTY_ORDER.forEach(function (k) {
+    const d = SS.DIFFICULTIES[k];
+    ok(!!d && !!d.name && !!d.blurb && !!d.code, k + ' is described and has a hotkey');
+  });
+
+  /* The same seed must build the same sector on Normal whether or not a
+     previous run left another mode selected. */
+  function fingerprint(seed, depth, mode) {
+    SS.game.difficulty = mode;
+    SS.rng.seed(seed);
+    SS.ship.resetIds(1);
+    const sec = SS.makeSector(depth);
+    let h = 2166136261;
+    for (let i = 0; i < sec.tiles.length; i++) { h ^= sec.tiles[i]; h = Math.imul(h, 16777619); }
+    return {
+      key: (h >>> 0).toString(16) + ':' + sec.greens.length + ':' + sec.enemies.length,
+      greens: sec.greens.length,
+      pilots: sec.enemies.length,
+      build: sec.enemies.reduce((a, e) => a + e.guns + e.bombs, 0),
+      skill: sec.enemies.reduce((a, e) => a + e.skill, 0) / Math.max(1, sec.enemies.length)
+    };
+  }
+
+  const seeds = [1, 7, 42, 1234];
+  const depths = [1, 5, 13, 26];
+  seeds.forEach(function (seed) {
+    depths.forEach(function (depth) {
+      const a = fingerprint(seed, depth, 'normal');
+      SS.game.difficulty = 'easy';
+      fingerprint(seed, depth, 'easy');            // dirty the state in between
+      const b = fingerprint(seed, depth, 'normal');
+      eq(b.key, a.key,
+        'seed ' + seed + ' sector ' + depth + ': Normal is unaffected by the other mode');
+    });
+  });
+
+  /* ---- Easy is measurably gentler on every lever ---------------------- */
+
+  let easierPilots = 0, moreGreens = 0, softerPilots = 0, lighterBuilds = 0;
+  seeds.forEach(function (seed) {
+    depths.forEach(function (depth) {
+      const n = fingerprint(seed, depth, 'normal');
+      const e = fingerprint(seed, depth, 'easy');
+      if (e.pilots < n.pilots) easierPilots++;
+      if (e.greens > n.greens) moreGreens++;
+      if (e.skill < n.skill) softerPilots++;
+      if (e.build <= n.build) lighterBuilds++;
+    });
+  });
+  const cells = seeds.length * depths.length;
+  ok(easierPilots >= cells - 1, 'Easy sectors hold fewer pilots (' + easierPilots + '/' + cells + ')');
+  ok(moreGreens === cells, 'Easy sectors hold more greens (' + moreGreens + '/' + cells + ')');
+  ok(softerPilots >= cells - 1, 'Easy pilots are less skilled (' + softerPilots + '/' + cells + ')');
+  ok(lighterBuilds >= cells - 1, 'Easy pilots are less well built (' + lighterBuilds + '/' + cells + ')');
+
+  SS.game.difficulty = 'easy';
+  ok(SS.negativeFactorFor(20) > (function () {
+    SS.game.difficulty = 'normal';
+    const v = SS.negativeFactorFor(20);
+    SS.game.difficulty = 'easy';
+    return v;
+  })(), 'Easy meets fewer negative greens');
+  SS.game.difficulty = 'normal';
+
+  /* ---- losing a hull -------------------------------------------------- */
+
+  const idle = () => ({ forward: false, backward: false, left: false, right: false, afterburner: false });
+  SS.input.flight = idle;
+  SS.input.firingGun = () => false;
+  SS.input.takeActions = () => [];
+
+  SS.rng.seed(515);
+  SS.game.newGame({ name: 'Wing', shipKey: 'warbird', seed: 515, difficulty: 'easy' });
+  let g = SS.game;
+  eq(g.shipsLeft, SS.DIFFICULTIES.easy.ships, 'an Easy run launches with a full wing');
+
+  /* build the hull up, then lose it */
+  for (let i = 0; i < 30; i++) {
+    SS.ship.applyPrize(g.player, Math.abs(SS.rollPrize(SS.ship.def(g.player), 0)), g.sector);
+  }
+  const built = g.player.stat.recharge;
+  const factory = SS.ship.settings(g.player).InitialRecharge;
+  ok(built > factory, 'the hull was actually built up before it died');
+
+  g.player.energy = 0;
+  g.player.alive = false;
+  g.death(null);
+
+  ok(!g.over, 'losing a hull with spares does not end the run');
+  ok(g.player.alive, 'a fresh hull launches');
+  eq(g.shipsLeft, SS.DIFFICULTIES.easy.ships - 1, 'the wing is one hull down');
+  eq(g.player.stat.recharge, factory, 'the fresh hull is back to factory settings');
+  eq(g.player.guns, SS.ship.settings(g.player).InitialGuns, 'and factory guns');
+  eq(g.player.deaths, 1, 'the loss is recorded');
+  ok(!SS.physics.boxHitsSolid(g.sector, g.player.x, g.player.y, g.player.radius),
+    'the fresh hull launches somewhere it fits');
+  ok(g.player.timer.spawnGuard > 0, 'and is briefly untouchable');
+
+  /* the Flag goes home rather than respawning with you */
+  g.player.hasFlag = true;
+  g.flagTaken = true;
+  g.player.alive = false;
+  g.death(null);
+  ok(!g.player.hasFlag, 'losing a hull drops the Prime Flag');
+  ok(!g.flagTaken, 'and the Flag returns to the Core to be taken again');
+
+  /* run the wing out */
+  let guard = 0;
+  while (!g.over && guard++ < 20) {
+    g.player.alive = false;
+    g.death(null);
+  }
+  ok(g.over, 'the run ends when the last hull is gone');
+  eq(g.shipsLeft, 0, 'no hulls remain');
+  g.ended = true;
+
+  /* Normal has no spare hulls at all. */
+  SS.rng.seed(516);
+  SS.game.newGame({ name: 'Solo', shipKey: 'warbird', seed: 516, difficulty: 'normal' });
+  g = SS.game;
+  eq(g.shipsLeft, 1, 'a Normal run has a single hull');
+  g.player.alive = false;
+  g.death(null);
+  ok(g.over, 'Normal still ends on the first death');
+  g.ended = true;
+
+  /* ---- score, and the save --------------------------------------------- */
+
+  SS.rng.seed(517);
+  SS.game.newGame({ name: 'Score', shipKey: 'spider', seed: 517, difficulty: 'easy' });
+  g = SS.game;
+  g.points = 10000;
+  g.maxDepthReached = 10;
+  const easyScore = g.computeScore();
+  g.difficulty = 'normal';
+  const normalScore = g.computeScore();
+  ok(easyScore < normalScore,
+    'an Easy run scores less for the same run (' + easyScore + ' vs ' + normalScore + ')');
+  g.difficulty = 'easy';
+
+  g.shipsLeft = 3;
+  ok(SS.save.saveGame(), 'an Easy run saves');
+  g.difficulty = 'normal';
+  g.shipsLeft = 1;
+  ok(SS.save.loadGame(), 'and loads');
+  eq(SS.game.difficulty, 'easy', 'the mode survives the round trip');
+  eq(SS.game.shipsLeft, 3, 'and so does the number of hulls left');
+  const info = SS.save.saveInfo();
+  eq(info.difficulty, 'easy', 'the title screen can see which mode a save is');
+  eq(info.shipsLeft, 3, 'and how many hulls it has left');
+  SS.game.over = true; SS.game.ended = true;
+  SS.game.difficulty = 'normal';
+
+  SS.input.flight = idle;
+  SS.input.firingGun = () => false;
+}
+
 /* Wormholes.
  *
  * This stage exists because of a bug that shipped: a wormhole's destination
@@ -1456,6 +1631,7 @@ const STAGES = {
   pilot: stagePilot,
   play: stagePlay,
   balance: stageBalance,
+  difficulty: stageDifficulty,
   wormholes: stageWormholes,
   input: stageInput,
   deploy: stageDeploy,

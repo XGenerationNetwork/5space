@@ -127,6 +127,7 @@ play.html           the game's page shell
 css/style.css       overlay and menu styling
 js/rng.js           seeded xoshiro128** RNG, vectors, headings, RLE
 js/data/ships.js    the eight hulls and the arena settings
+js/data/difficulty.js  Easy and Normal, as multipliers on six levers
 js/data/prizes.js   the 28 prize types and the roll tables
 js/data/enemies.js  the pilot roster
 js/sector.js        tiles and procedural sector generation
@@ -147,6 +148,43 @@ test/headless.js    test harness
 serve.js            static dev server
 build.js            single-file bundler
 ```
+
+## Difficulty
+
+The two games this one is made of disagree about exactly one thing, and it is the
+thing a difficulty setting should be about. SubSpace kills you constantly and does
+not care: you respawn, you lose the prizes you were carrying, you go again. NetHack
+kills you once. So the modes are not a damage slider — they are which ancestor is in
+charge of dying.
+
+| | |
+|---|---|
+| **Normal** | One hull, one run, permadeath. The game as designed. |
+| **Easy** | A wing of five hulls. Losing one costs every green it had collected and drops the Prime Flag back into the Core, but the run continues. Fewer and softer pilots, more greens and fewer bad ones, a slower hunt. Scores count for half. |
+
+The whole table lives in [`js/data/difficulty.js`](js/data/difficulty.js) as
+multipliers on six levers — pilot count, pilot build, pilot skill, green density,
+negative-green rate and reinforcement interval — plus the number of hulls and a
+score multiplier.
+
+**Every multiplier is 1 on Normal, and every one is applied *after* the random draw
+it scales**, so a Normal run generates precisely the universe it did before the
+setting existed. That is not obvious and it is easy to break: widening the green
+clamp to make room for Easy's multiplier changed Normal's figure and shifted every
+sector it generates. The `difficulty` test stage fingerprints Normal across sixteen
+seed-and-depth combinations, interleaving an Easy generation between each pair, and
+fails if any of them moves.
+
+Measured with the balance autopilot (lower quartile of survival, 10 seeds):
+
+| sector | Normal | Easy |
+|---|---|---|
+| 1 | 20s, 39 greens | 180s, 109 greens |
+| 8 | 11s, 13 greens | 180s, 104 greens |
+| 18 | 8s, 8 greens | 180s, 107 greens |
+
+Easy still costs hulls — the same autopilot burns 3.1 of its 5 in three minutes at
+sector 18 — it just does not end the run for it.
 
 ## Touch
 
@@ -230,6 +268,10 @@ script list comes out of `play.html`, so the two cannot drift apart — and chec
   time and on greens collected, not the median: survival is strongly bimodal —
   the autopilot either dies early or rides out the whole window — so the median
   jumps between the two humps with the sample size and makes for a flaky test
+- **difficulty** — that Normal is bit-identical to the game before the setting
+  existed, that Easy is gentler on every lever, that losing a hull resets it to
+  factory and drops the Flag without ending the run, and that the mode and the
+  hulls left survive a save
 - **wormholes** — that no wormhole aims at a place a ship cannot leave under
   its own power, that sitting in one does not teleport you repeatedly, that
   pilots pass through instead of piling up in the well, and that one still

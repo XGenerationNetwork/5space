@@ -38,7 +38,10 @@
         letter: 'c', selectable: true, value: 'continue',
         html: '<span class="hi">Continue</span> &mdash; ' + SS.hud.escapeHtml(
           info.name + ' in a ' + (SS.SHIPS[info.ship] ? SS.SHIPS[info.ship].name : info.ship) +
-          ', ' + where + ' (' + SS.clockString(info.elapsed) + ')')
+          ', ' + where + ' (' + SS.clockString(info.elapsed) + ')' +
+          (info.difficulty === 'normal' ? '' :
+            '  [' + SS.difficultyByKey(info.difficulty).name +
+            (info.shipsLeft > 1 ? ', ' + info.shipsLeft + ' hulls' : ', last hull') + ']'))
       });
     }
     rows.push({ letter: 'n', selectable: true, value: 'new', text: 'New run' });
@@ -102,6 +105,33 @@
     if (!name) name = stored || 'Pilot';
     try { localStorage.setItem('5space.name', name); } catch (e) { /* ignore */ }
 
+    /* Difficulty is asked before the hull, because it changes what the hull
+       has to survive.  The last choice is remembered, since most people pick
+       one and stay there. */
+    var stored_diff = '';
+    try { stored_diff = localStorage.getItem('5space.difficulty') || ''; } catch (e) { /* ignore */ }
+    var difficulty = SS.difficultyByKey(stored_diff).key;
+
+    if (!randomize) {
+      var drows = SS.DIFFICULTY_ORDER.map(function (k) {
+        var d = SS.DIFFICULTIES[k];
+        return {
+          letter: d.code, selectable: true, value: k,
+          html: '<span class="shipname">' + SS.hud.escapeHtml(pad(d.name, 9)) + '</span>' +
+            '<span class="shipstats">' +
+            (d.ships > 1 ? d.ships + ' hulls' : 'one hull, permadeath') + '</span>' +
+            '<div class="shipblurb">' + SS.hud.escapeHtml(d.blurb) + '</div>' +
+            '<div class="shiphint">' + SS.hud.escapeHtml(d.hint) + '</div>'
+        };
+      });
+      var dsel = await SS.hud.menu('Difficulty', drows, {
+        full: true, footerText: '(Choose with a letter, Esc to go back)'
+      });
+      if (!dsel || !dsel.length) { await main.titleScreen(); return; }
+      difficulty = dsel[0];
+    }
+    try { localStorage.setItem('5space.difficulty', difficulty); } catch (e) { /* ignore */ }
+
     var keys = SS.shipList();
     var shipKey;
 
@@ -133,7 +163,7 @@
       shipKey = sel[0] === '__random' ? SS.pick(keys) : sel[0];
     }
 
-    SS.game.newGame({ name: name, shipKey: shipKey });
+    SS.game.newGame({ name: name, shipKey: shipKey, difficulty: difficulty });
     SS.save.saveGame();
     SS.game.start();
   };

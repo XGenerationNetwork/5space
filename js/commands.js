@@ -18,6 +18,8 @@
     var game = SS.game;
     var rows = [
       { letter: 'c', selectable: true, value: 'close', text: 'Back to flight' },
+      { text: '  ' + SS.difficulty().name +
+        (game.shipsLeft > 1 ? '  -  ' + game.shipsLeft + ' hulls left' : '  -  last hull') },
       { letter: 'i', selectable: true, value: 'ship', text: 'Ship readout' },
       { letter: '\\', selectable: true, value: 'log', text: 'Greens you have opened' },
       { letter: '?', selectable: true, value: 'help', text: 'Controls' },
@@ -149,9 +151,20 @@
       'Purple wells are wormholes. They pull, then they throw you.',
       'The gold ring is the warp portal down. The blue one goes back up.',
       'Sector 26 holds the Prime Flag. Take it and carry it back out through',
-      'the blue portal in sector 1. Carrying it makes every sector hostile.',
-      'There is no respawn. Dying ends the run.'
+      'the blue portal in sector 1. Carrying it makes every sector hostile.'
     ].forEach(function (t) { lines.push({ text: '  ' + t }); });
+
+    lines.push({ text: '' });
+    lines.push({ header: true, text: 'This run: ' + SS.difficulty().name });
+    if (SS.game.shipsLeft > 1) {
+      lines.push({ text: '  ' + SS.game.shipsLeft + ' hulls left. Losing one costs you every green ' +
+        'it had collected,' });
+      lines.push({ text: '  and drops the Prime Flag back into the Core - but the run goes on.' });
+    } else if (SS.difficulty().ships > 1) {
+      lines.push({ text: '  Last hull. The next one you lose ends the run.' });
+    } else {
+      lines.push({ text: '  One hull, no respawn. Dying ends the run and deletes the save.' });
+    }
     await SS.hud.showText(lines, '5Space');
   };
 

@@ -1106,6 +1106,84 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
 })(typeof window !== 'undefined' ? (window.SS = window.SS || {}) : (global.SS = global.SS || {}));
 
+/* ===== js/data/difficulty.js ===== */
+/* 5Space - difficulty.
+ *
+ * The two games this one is made of disagree about exactly one thing, and it
+ * is the thing difficulty should be about.  SubSpace kills you constantly and
+ * does not care: you respawn, you lose the prizes you were carrying, you go
+ * again.  NetHack kills you once.  So the modes are not a damage slider -
+ * they are which of the two ancestors is in charge of dying.
+ *
+ *   Normal  the roguelike answer.  One hull, one run, permadeath.
+ *   Easy    SubSpace's own answer.  A wing of five hulls; losing one costs
+ *           you every green you had collected, which is penalty enough.
+ *
+ * Everything else follows from that: an Easy run also meets fewer and worse
+ * pilots, finds more greens and fewer bad ones, and is chased less hard - so
+ * that the extra hulls are a cushion rather than five goes at the same wall.
+ *
+ * Every multiplier is 1 on Normal, and every one of them is applied *after*
+ * the random draw it modifies, so a Normal run generates precisely the
+ * universe it did before this file existed.
+ */
+(function (SS) {
+  'use strict';
+
+  var DIFFICULTIES = {
+    easy: {
+      key: 'easy',
+      name: 'Easy',
+      code: 'e',
+      blurb: 'A wing of five hulls. Lose one and you lose everything it was ' +
+             'carrying, but the run goes on.',
+      hint: 'Fewer and softer pilots, kinder greens, a slower hunt. ' +
+            'Scores count for half.',
+
+      ships: 5,            // hulls per run
+      enemies: 0.6,        // how many pilots a sector launches with
+      enemyPrizes: 0.6,    // how well built they are
+      enemySkill: 0.55,    // how straight they shoot and how fast they react
+      greens: 1.4,         // how thickly prizes are scattered
+      negativeGreens: 2.0, // multiplies the "one green in N is bad" figure
+      reinforcements: 1.8, // how long between replacements
+      scoreMultiplier: 0.5
+    },
+
+    normal: {
+      key: 'normal',
+      name: 'Normal',
+      code: 'n',
+      blurb: 'One hull, one run. Dying ends it and deletes the save.',
+      hint: 'The game as designed. Twenty-six sectors with no second chances.',
+
+      ships: 1,
+      enemies: 1,
+      enemyPrizes: 1,
+      enemySkill: 1,
+      greens: 1,
+      negativeGreens: 1,
+      reinforcements: 1,
+      scoreMultiplier: 1
+    }
+  };
+
+  SS.DIFFICULTIES = DIFFICULTIES;
+  SS.DIFFICULTY_ORDER = ['normal', 'easy'];
+
+  /* The mode in force.  Reads from the run when there is one, so nothing has
+     to thread a difficulty argument through the generator. */
+  SS.difficulty = function () {
+    var key = (SS.game && SS.game.difficulty) || 'normal';
+    return DIFFICULTIES[key] || DIFFICULTIES.normal;
+  };
+
+  SS.difficultyByKey = function (key) {
+    return DIFFICULTIES[key] || DIFFICULTIES.normal;
+  };
+
+})(typeof window !== 'undefined' ? (window.SS = window.SS || {}) : (global.SS = global.SS || {}));
+
 /* ===== js/data/prizes.js ===== */
 /* 5Space - greens.
  *
@@ -1329,7 +1407,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   SS.negativeFactorFor = function (depth) {
     var base = SS.ARENA.PrizeNegativeFactor;
     var f = Math.round(base - (depth - 1) * 0.35);
-    return Math.max(4, f);
+    return Math.max(4, Math.round(f * SS.difficulty().negativeGreens));
   };
 
   /* ------------------------------------------------------------------ */
@@ -1554,10 +1632,16 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
      and the base garrisons, which are the dangerous ones, do not appear in
      any number until you have had a few sectors to build a hull. */
   SS.enemyBudget = function (depth) {
+    /* The draws happen first and the difficulty scaling second, so Normal
+       consumes exactly the random stream it always did. */
+    var roaming = 3 + Math.floor(depth * 0.75) + SS.rn2(3);
+    var turrets = Math.floor(depth * 0.5) + SS.rn2(2);
+    var inBase = Math.floor(depth * 0.45) + (depth > 2 ? 1 : 0);
+    var mult = SS.difficulty().enemies;
     return {
-      roaming: 3 + Math.floor(depth * 0.75) + SS.rn2(3),
-      inBase: Math.floor(depth * 0.45) + (depth > 2 ? 1 : 0),
-      turrets: Math.floor(depth * 0.5) + SS.rn2(2)
+      roaming: Math.max(1, Math.round(roaming * mult)),
+      inBase: Math.round(inBase * mult),
+      turrets: Math.round(turrets * mult)
     };
   };
 
@@ -2320,8 +2404,12 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
      way a zone seeds its map. */
   function scatterGreens(sec, depth) {
     var open = countOpen(sec);
+    /* Clamp first, scale second.  Widening the clamp to make room for a
+       difficulty multiplier would change the figure Normal has always used,
+       and with it every sector Normal generates. */
     var want = Math.round((open / 1000) * SS.ARENA.PrizeFactor);
     want = SS.clamp(want, 60, 460);
+    want = Math.round(want * SS.difficulty().greens);
     var placed = 0, attempts = 0;
     while (placed < want && attempts++ < want * 40) {
       var x = SS.rn1(SIZE - 16, 8), y = SS.rn1(SIZE - 16, 8);
@@ -3859,7 +3947,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     /* Give the pilot its build.  Positive greens only - an enemy that had
        been prized downwards would just be a worse enemy. */
     if (!bare) {
-      var n = def.prizes + SS.rn2(3);
+      var n = Math.round((def.prizes + SS.rn2(3)) * SS.difficulty().enemyPrizes);
       for (var i = 0; i < n; i++) {
         SS.ship.applyPrize(sh, Math.abs(SS.rollPrize(SS.ship.def(sh), 0)), sec);
       }
@@ -3888,7 +3976,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
        hull is, and it drives the two things that actually separate a rookie
        from a warlord: how straight they shoot, and how long they take to
        decide to. */
-    sh.skill = SS.clamp((def.difficulty - 1) / (SS.MAXDEPTH - 1), 0, 1);
+    sh.skill = SS.clamp((def.difficulty - 1) / (SS.MAXDEPTH - 1), 0, 1) *
+      SS.difficulty().enemySkill;
     sh.aimJitter = 0;
     sh.jitterTimer = 0;
     sh.reaction = 0;
@@ -3914,13 +4003,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   /* per-tick AI                                                        */
   /* ------------------------------------------------------------------ */
 
-  /* Behaviour constants, in tiles. */
-  /* `range` is the distance a pilot tries to hold.  They are short by the
-     standards of most shooters, and deliberately: with only forty firing
-     headings, a bullet aimed as well as the hull allows is still up to 4.5
-     degrees off, which is a clean miss on a ship beyond about twenty tiles.
-     SubSpace gunfights happen close for exactly this reason. */
-  /* `range` is the distance a pilot tries to hold, `gun` and `bomb` are how
+  /* Behaviour constants, in tiles.
+     `range` is the distance a pilot tries to hold, `gun` and `bomb` are how
      far it is willing to shoot.  The ranges are short by the standards of
      most shooters, and deliberately: with only forty firing headings a bullet
      aimed as well as the hull allows is still up to 4.5 degrees off, which is
@@ -5515,6 +5599,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
     var lines = [];
     lines.push({ text: def.name + '  -  Sector ' + game.sector.depth +
+      (game.shipsLeft > 1 ? '  -  ' + game.shipsLeft + ' hulls' : '') +
       (game.player.hasFlag ? '  [PRIME FLAG]' : ''), color: '#cfe4ff' });
     lines.push({ text: 'Guns ' + p.guns + '   Bombs ' + (p.bombs || '-') +
       (p.mines ? '   Mines ' + p.mines : '') +
@@ -5559,6 +5644,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     var def = SS.ship.def(p);
 
     var first = def.name + '  S' + game.sector.depth +
+      (game.shipsLeft > 1 ? '  x' + game.shipsLeft : '') +
       '  G' + p.guns + (p.bombs ? ' B' + p.bombs : '') +
       '  ' + Math.round(p.bounty) + 'pts' +
       (p.hasFlag ? '  [FLAG]' : '');
@@ -6480,6 +6566,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     var game = SS.game;
     var rows = [
       { letter: 'c', selectable: true, value: 'close', text: 'Back to flight' },
+      { text: '  ' + SS.difficulty().name +
+        (game.shipsLeft > 1 ? '  -  ' + game.shipsLeft + ' hulls left' : '  -  last hull') },
       { letter: 'i', selectable: true, value: 'ship', text: 'Ship readout' },
       { letter: '\\', selectable: true, value: 'log', text: 'Greens you have opened' },
       { letter: '?', selectable: true, value: 'help', text: 'Controls' },
@@ -6611,9 +6699,20 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       'Purple wells are wormholes. They pull, then they throw you.',
       'The gold ring is the warp portal down. The blue one goes back up.',
       'Sector 26 holds the Prime Flag. Take it and carry it back out through',
-      'the blue portal in sector 1. Carrying it makes every sector hostile.',
-      'There is no respawn. Dying ends the run.'
+      'the blue portal in sector 1. Carrying it makes every sector hostile.'
     ].forEach(function (t) { lines.push({ text: '  ' + t }); });
+
+    lines.push({ text: '' });
+    lines.push({ header: true, text: 'This run: ' + SS.difficulty().name });
+    if (SS.game.shipsLeft > 1) {
+      lines.push({ text: '  ' + SS.game.shipsLeft + ' hulls left. Losing one costs you every green ' +
+        'it had collected,' });
+      lines.push({ text: '  and drops the Prime Flag back into the Core - but the run goes on.' });
+    } else if (SS.difficulty().ships > 1) {
+      lines.push({ text: '  Last hull. The next one you lose ends the run.' });
+    } else {
+      lines.push({ text: '  One hull, no respawn. Dying ends the run and deletes the save.' });
+    }
     await SS.hud.showText(lines, '5Space');
   };
 
@@ -6839,6 +6938,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       gameVersion: SS.VERSION,
       savedAt: Date.now(),
       seed: g.seed,
+      difficulty: g.difficulty,
+      shipsLeft: g.shipsLeft,
       rngState: SS.rng.getState(),
       depth: g.depth,
       maxDepthReached: g.maxDepthReached,
@@ -6858,6 +6959,9 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   save.deserialize = function (data) {
     var g = SS.game;
     g.seed = data.seed;
+    /* before the sectors are unpacked: rebuilding a pilot reads the mode */
+    g.difficulty = SS.difficultyByKey(data.difficulty).key;
+    g.shipsLeft = data.shipsLeft === undefined ? SS.difficulty().ships : data.shipsLeft;
     g.depth = data.depth;
     g.maxDepthReached = data.maxDepthReached || data.depth;
     g.points = data.points || 0;
@@ -6944,6 +7048,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         ship: data.player.shipKey,
         depth: data.depth,
         maxDepth: data.maxDepthReached,
+        difficulty: SS.difficultyByKey(data.difficulty).key,
+        shipsLeft: data.shipsLeft,
         points: data.points,
         elapsed: data.elapsed,
         hasFlag: !!data.player.hasFlag,
@@ -7040,10 +7146,12 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
  *   dungeon level  ->  sector, persistent, regenerated never
  *   staircase down ->  warp portal
  *   Amulet of Yendor -> the Prime Flag, in a vault at sector 26
- *   permadeath     ->  permadeath
+ *   permadeath     ->  permadeath, on Normal
  *
  * Take the Flag, carry it back up through twenty-six sectors, and warp out
- * through the top. Dying is the end of the run.
+ * through the top.  On Normal, dying is the end of the run; on Easy you have
+ * a wing of hulls and losing one costs you everything it had collected, which
+ * is SubSpace's own answer to the same question.  See data/difficulty.js.
  */
 (function (SS) {
   'use strict';
@@ -7057,6 +7165,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     depth: 1,
     maxDepthReached: 1,
     seed: 0,
+    difficulty: 'normal',
+    shipsLeft: 1,
     points: 0,
     elapsed: 0,
     kills: {},
@@ -7084,6 +7194,11 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   /* ------------------------------------------------------------------ */
 
   game.newGame = function (opts) {
+    /* Set before anything is generated: sector layout, pilot builds and the
+       green table all read the mode straight off the run. */
+    game.difficulty = SS.difficultyByKey(opts.difficulty).key;
+    game.shipsLeft = SS.difficulty().ships;
+
     game.seed = opts.seed || ((Date.now() ^ (Math.random() * 0x100000000)) >>> 0);
     SS.rng.seed(game.seed);
     SS.ship.resetIds(1);
@@ -7131,6 +7246,10 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     var def = SS.SHIPS[opts.shipKey];
     SS.msgBig('Sector 1', '#9fd6ff');
     SS.msg('You launch in a ' + def.name + '. Find the warp portal and go down.');
+    if (game.shipsLeft > 1) {
+      SS.msg('Easy: a wing of ' + game.shipsLeft + ' hulls. Losing one costs ' +
+        'you everything it was carrying.', '#9fd6ff');
+    }
     SS.msg('Green diamonds are prizes. You will not know what one is until you take it.');
   };
 
@@ -7439,7 +7558,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
   function trickleReinforcements(sec, dt) {
     game.spawnTimer = (game.spawnTimer || 0) + dt;
-    var interval = game.player.hasFlag ? 4.0 : 18.0;
+    var interval = (game.player.hasFlag ? 4.0 : 18.0) * SS.difficulty().reinforcements;
     if (game.spawnTimer < interval) return;
     game.spawnTimer = 0;
     SS.spawnWanderer(sec, sec.depth, game.player, game.player.hasFlag);
@@ -7599,17 +7718,61 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
   game.death = function (killerId) {
     if (game.over) return;
-    game.over = true;
+    var p = game.player;
     var killer = null;
     for (var i = 0; i < game.sector.enemies.length; i++) {
       if (game.sector.enemies[i].id === killerId) killer = game.sector.enemies[i];
     }
+    SS.render.explosion(p.x, p.y, 5, '#ffaa55');
+    p.deaths++;
+
+    /* With hulls to spare this is SubSpace's death rather than NetHack's: you
+       lose the ship and everything the greens had built on it, and you go
+       again.  That loss is the whole penalty and it is a real one - a hull
+       stripped back to factory in sector 19 is in serious trouble. */
+    if (game.shipsLeft > 1) {
+      game.shipsLeft--;
+      respawnPlayer(killer);
+      return;
+    }
+
+    game.shipsLeft = 0;
+    game.over = true;
     game.killer = killer ? killer.name : null;
     game.deathReason = killer
       ? 'shot down by ' + SS.anArticle(killer.name)
       : 'destroyed in sector ' + game.depth;
-    SS.render.explosion(game.player.x, game.player.y, 5, '#ffaa55');
   };
+
+  function respawnPlayer(killer) {
+    var p = game.player;
+    var sec = game.sector;
+
+    /* The Flag does not come back with you.  It returns to the vault it came
+       from, so the climb has to be done again - the one part of a run that
+       spare hulls do not soften. */
+    if (p.hasFlag) {
+      p.hasFlag = false;
+      game.flagTaken = false;
+      SS.msgBig('The Prime Flag falls back to the Core.', '#ff8888');
+    }
+
+    SS.ship.resetToInitial(p);
+    var spot = sec.portalUp || sec.spawn || SS.randomOpenSpot(sec, {});
+    p.x = spot.x; p.y = spot.y;
+    p.vx = p.vy = 0;
+    p.inWormhole = false;
+    p.timer.spawnGuard = SS.ARENA.EnterDelay + 1.0;
+
+    SS.radar.revealAround(sec, p.x, p.y, 20);
+    SS.msgBig(game.shipsLeft + ' ' + SS.plural(game.shipsLeft, 'hull') + ' left',
+      '#ffaa66');
+    SS.msg(killer
+      ? 'Shot down by ' + SS.anArticle(killer.name) + '. A fresh hull launches.'
+      : 'Your hull is lost. A fresh one launches.', '#ffaa66');
+    SS.msg('Everything the greens had built is gone with it.', '#ff9a6a');
+    SS.save.saveGame();
+  }
 
   game.win = function () {
     if (game.over) return;
@@ -7633,6 +7796,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     score += game.greensTaken * 6;
     score += Math.round(p.bounty) * 25;
     if (game.won) score = score * 2 + 25000;
+    score *= SS.difficulty().scoreMultiplier;
     return Math.max(0, Math.round(score));
   };
 
@@ -7674,12 +7838,17 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     }
 
     lines.push({ text: '  ' + p.name + ' the ' + SS.rankTitle(score) +
-      ', flying a ' + SS.ship.def(p).name + '.' });
+      ', flying a ' + SS.ship.def(p).name +
+      ' on ' + SS.difficulty().name + '.' });
     lines.push({ text: '  ' + SS.capitalize(game.deathReason || 'lost') +
       ' with ' + SS.commify(score) + ' points, after ' + SS.clockString(game.elapsed) + '.' });
     lines.push({ text: '  Reached sector ' + game.maxDepthReached + ' of ' + SS.MAXDEPTH +
       ', took ' + game.greensTaken + ' greens, and shot down ' + p.kills +
       ' ' + SS.plural(p.kills, 'pilot') + '.' });
+    if (p.deaths > 0) {
+      lines.push({ text: '  Lost ' + p.deaths + ' ' + SS.plural(p.deaths, 'hull') +
+        ' along the way.' });
+    }
     lines.push({ text: '' });
 
     var killList = Object.keys(game.kills);
@@ -7697,7 +7866,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     SS.commands.readoutLines(p).forEach(function (l) { lines.push(l); });
 
     SS.save.addScore({
-      name: p.name, ship: p.shipKey, score: score,
+      name: p.name, ship: p.shipKey, score: score, difficulty: game.difficulty,
       depth: game.depth, maxDepth: game.maxDepthReached,
       kills: p.kills, greens: game.greensTaken,
       seconds: Math.round(game.elapsed),
@@ -7719,6 +7888,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
           padRight(SS.commify(s.score), 9) +
           s.name + ' the ' + SS.rankTitle(s.score) +
           ', ' + (SS.SHIPS[s.ship] ? SS.SHIPS[s.ship].name : s.ship) +
+          (s.difficulty && s.difficulty !== 'normal'
+            ? ' [' + SS.difficultyByKey(s.difficulty).name + ']' : '') +
           ' - ' + s.how + ' (sector ' + s.maxDepth + ')'
       });
     });
@@ -7783,7 +7954,10 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         letter: 'c', selectable: true, value: 'continue',
         html: '<span class="hi">Continue</span> &mdash; ' + SS.hud.escapeHtml(
           info.name + ' in a ' + (SS.SHIPS[info.ship] ? SS.SHIPS[info.ship].name : info.ship) +
-          ', ' + where + ' (' + SS.clockString(info.elapsed) + ')')
+          ', ' + where + ' (' + SS.clockString(info.elapsed) + ')' +
+          (info.difficulty === 'normal' ? '' :
+            '  [' + SS.difficultyByKey(info.difficulty).name +
+            (info.shipsLeft > 1 ? ', ' + info.shipsLeft + ' hulls' : ', last hull') + ']'))
       });
     }
     rows.push({ letter: 'n', selectable: true, value: 'new', text: 'New run' });
@@ -7847,6 +8021,33 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     if (!name) name = stored || 'Pilot';
     try { localStorage.setItem('5space.name', name); } catch (e) { /* ignore */ }
 
+    /* Difficulty is asked before the hull, because it changes what the hull
+       has to survive.  The last choice is remembered, since most people pick
+       one and stay there. */
+    var stored_diff = '';
+    try { stored_diff = localStorage.getItem('5space.difficulty') || ''; } catch (e) { /* ignore */ }
+    var difficulty = SS.difficultyByKey(stored_diff).key;
+
+    if (!randomize) {
+      var drows = SS.DIFFICULTY_ORDER.map(function (k) {
+        var d = SS.DIFFICULTIES[k];
+        return {
+          letter: d.code, selectable: true, value: k,
+          html: '<span class="shipname">' + SS.hud.escapeHtml(pad(d.name, 9)) + '</span>' +
+            '<span class="shipstats">' +
+            (d.ships > 1 ? d.ships + ' hulls' : 'one hull, permadeath') + '</span>' +
+            '<div class="shipblurb">' + SS.hud.escapeHtml(d.blurb) + '</div>' +
+            '<div class="shiphint">' + SS.hud.escapeHtml(d.hint) + '</div>'
+        };
+      });
+      var dsel = await SS.hud.menu('Difficulty', drows, {
+        full: true, footerText: '(Choose with a letter, Esc to go back)'
+      });
+      if (!dsel || !dsel.length) { await main.titleScreen(); return; }
+      difficulty = dsel[0];
+    }
+    try { localStorage.setItem('5space.difficulty', difficulty); } catch (e) { /* ignore */ }
+
     var keys = SS.shipList();
     var shipKey;
 
@@ -7878,7 +8079,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       shipKey = sel[0] === '__random' ? SS.pick(keys) : sel[0];
     }
 
-    SS.game.newGame({ name: name, shipKey: shipKey });
+    SS.game.newGame({ name: name, shipKey: shipKey, difficulty: difficulty });
     SS.save.saveGame();
     SS.game.start();
   };

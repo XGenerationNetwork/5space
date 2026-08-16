@@ -217,6 +217,8 @@
       gameVersion: SS.VERSION,
       savedAt: Date.now(),
       seed: g.seed,
+      difficulty: g.difficulty,
+      shipsLeft: g.shipsLeft,
       rngState: SS.rng.getState(),
       depth: g.depth,
       maxDepthReached: g.maxDepthReached,
@@ -236,6 +238,9 @@
   save.deserialize = function (data) {
     var g = SS.game;
     g.seed = data.seed;
+    /* before the sectors are unpacked: rebuilding a pilot reads the mode */
+    g.difficulty = SS.difficultyByKey(data.difficulty).key;
+    g.shipsLeft = data.shipsLeft === undefined ? SS.difficulty().ships : data.shipsLeft;
     g.depth = data.depth;
     g.maxDepthReached = data.maxDepthReached || data.depth;
     g.points = data.points || 0;
@@ -322,6 +327,8 @@
         ship: data.player.shipKey,
         depth: data.depth,
         maxDepth: data.maxDepthReached,
+        difficulty: SS.difficultyByKey(data.difficulty).key,
+        shipsLeft: data.shipsLeft,
         points: data.points,
         elapsed: data.elapsed,
         hasFlag: !!data.player.hasFlag,
