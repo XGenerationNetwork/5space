@@ -29,7 +29,48 @@
     msgbox = document.getElementById('messages');
     banner = document.getElementById('banner');
     document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('pointerdown', function () { gesture++; }, true);
+    /* a fallback for anything without pointer events */
+    document.addEventListener('touchstart', function () { gesture++; }, true);
   };
+
+  /* ------------------------------------------------------------------ */
+  /* gestures                                                           */
+  /* ------------------------------------------------------------------ */
+
+  /* One press-and-release is one gesture, counted from the press.
+   *
+   * This exists because a panel must not be closed by the very click that
+   * opened it.  Both dismissal paths - tapping a full-screen panel to
+   * continue, and tapping a menu's backdrop to cancel - are listeners on the
+   * overlay, and the overlay is already under the pointer when they are
+   * installed.  So the trailing `click` of the opening gesture arrives at a
+   * brand new listener and closes the thing it just opened.
+   *
+   * On a phone that made the menu button useless: tap it and the menu opened
+   * and shut in the same tap, unless you happened to slide your finger onto
+   * the menu box before lifting it.  On a desktop it made the ship readout,
+   * the prize log and the controls unreachable from the menu, because the
+   * click that picked the row bubbled on to the panel that row had just
+   * opened.
+   *
+   * A panel therefore records the gesture it was born in, and ignores
+   * anything belonging to that gesture or earlier. */
+  var gesture = 0;
+
+  function currentGesture() { return gesture; }
+
+  /* The overlay element outlives every panel drawn into it, so its click
+     handler has to be owned rather than merely added: exactly one panel is
+     visible at a time, and a handler left behind by an earlier one will keep
+     firing - cancelling the panel that replaced it. */
+  var overlayClick = null;
+
+  function setOverlayClick(fn) {
+    if (overlayClick) overlay.removeEventListener('click', overlayClick);
+    overlayClick = fn || null;
+    if (overlayClick) overlay.addEventListener('click', overlayClick);
+  }
 
   /* ------------------------------------------------------------------ */
   /* messages                                                           */
@@ -191,12 +232,16 @@
 
     /* Tapping the backdrop is the touch equivalent of Escape - otherwise a
        menu with nothing you want on it has no way out without a keyboard.
-       Only the backdrop itself: a tap that lands on the menu is a choice. */
-    function backdrop(ev) { if (ev.target === overlay) hud.pushKey('Escape'); }
-    overlay.addEventListener('click', backdrop);
+       Only the backdrop itself: a tap that lands on the menu is a choice, and
+       only from a gesture that started after this menu opened. */
+    var bornIn = currentGesture();
+    setOverlayClick(function backdrop(ev) {
+      if (currentGesture() <= bornIn) return;
+      if (ev.target === overlay) hud.pushKey('Escape');
+    });
 
     function close(result) {
-      overlay.removeEventListener('click', backdrop);
+      setOverlayClick(null);
       overlay.classList.add('hidden');
       overlay.innerHTML = '';
       overlayOpen = false;
@@ -233,12 +278,16 @@
     /* A tap counts as the any-key.  Without this every full-screen text
        panel - the help, the ship readout, the score table, and the death
        screen you cannot get past - is a dead end on a phone.  `click` rather
-       than a touch event, so scrolling a long panel does not dismiss it. */
-    function dismiss() { hud.pushKey(' '); }
-    overlay.addEventListener('click', dismiss);
+       than a touch event, so scrolling a long panel does not dismiss it, and
+       never the gesture that opened the panel in the first place. */
+    var bornIn = currentGesture();
+    setOverlayClick(function dismiss() {
+      if (currentGesture() <= bornIn) return;
+      hud.pushKey(' ');
+    });
 
     return hud.getKey().then(function () {
-      overlay.removeEventListener('click', dismiss);
+      setOverlayClick(null);
       overlay.classList.add('hidden');
       overlay.innerHTML = '';
       overlayOpen = false;
@@ -284,6 +333,7 @@
     if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
 
+    setOverlayClick(null);        // a text prompt has no tap-to-dismiss
     overlay.innerHTML = '';
     var box = document.createElement('div');
     box.className = 'menu';

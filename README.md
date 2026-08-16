@@ -236,6 +236,18 @@ the bottom between them, and only in portrait does it climb above.
 only reason a pause can be undone - and a tap or click anywhere on the game resumes
 it, with buttons excluded so the on-screen Pause control does not toggle twice.
 
+**A panel must not be closed by the click that opened it.** Both dismissal paths —
+tapping a full-screen panel to continue, tapping a menu backdrop to cancel — are
+listeners on the overlay, and the overlay is already under the pointer when they
+are installed, so the trailing `click` of the opening gesture arrives at a listener
+that did not exist when the press began. On a phone that made the menu button
+useless (it opened and shut in one tap unless you slid your finger onto the box
+first); on a desktop it made the ship readout, prize log and controls unreachable
+from the menu. Presses are counted, a panel records the gesture it was born in, and
+ignores that one. The overlay handler is also *owned* rather than merely added —
+exactly one panel is visible at a time, and a listener left behind by an earlier one
+kept cancelling whatever replaced it.
+
 **Every prompt has to be answerable by tap.** A prompt blocks until it is answered,
 so one that only listens for keystrokes is not awkward on a phone, it is a wall. The
 name prompt drew its own caret and read intercepted keys, so nothing was focused, no

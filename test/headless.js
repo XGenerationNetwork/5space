@@ -1614,6 +1614,38 @@ function stageInput() {
   gm.over = true; gm.ended = true;
   SS.input.takeActions = () => [];
 
+  /* ---- a panel is not closed by the click that opened it -------------- */
+
+  /* Both dismissal paths - tapping a full-screen panel to continue, and
+     tapping a menu's backdrop to cancel - are listeners on the overlay, and
+     the overlay is already under the pointer when they are installed.  So the
+     trailing `click` of the opening gesture lands on a listener that did not
+     exist when the press began, and shuts the thing it just opened.
+     On a phone the menu button opened and closed the menu in one tap unless
+     you slid your finger onto the menu box first; on a desktop the ship
+     readout, prize log and controls could not be opened from the menu at all.
+
+     A panel records the gesture it was born in and ignores that one.  No DOM
+     here, so this is a source-level guard; the behaviour itself is verified
+     in a browser. */
+  const hudGesture = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
+
+  ok(/pointerdown[\s\S]{0,120}gesture\+\+/.test(hudGesture),
+    'a press starts a new gesture');
+  ok(/var bornIn = currentGesture\(\)[\s\S]*?function backdrop[\s\S]*?currentGesture\(\) <= bornIn/
+    .test(hudGesture),
+    'a menu ignores backdrop clicks from the gesture that opened it');
+  ok(/var bornIn = currentGesture\(\)[\s\S]*?function dismiss[\s\S]*?currentGesture\(\) <= bornIn/
+    .test(hudGesture),
+    'a text panel ignores the click that opened it');
+
+  /* One overlay, one handler.  A panel that never closed used to leave its
+     listener attached, and it went on cancelling whatever replaced it. */
+  ok(/function setOverlayClick/.test(hudGesture),
+    'the overlay click handler is owned rather than merely added');
+  eq((hudGesture.match(/overlay\.addEventListener\('click'/g) || []).length, 1,
+    'and installed in exactly one place, so none can be orphaned');
+
   /* ---- no keyboard-only dead ends ------------------------------------ */
 
   /* Every prompt in the game blocks until it is answered, and on a phone the
@@ -1635,7 +1667,7 @@ function stageInput() {
     'the text prompt asks for a "go" key on the on-screen keyboard');
   ok(/focusSoon\(input\)/.test(hudSource),
     'the text prompt takes focus rather than waiting to be found');
-  ok(/showText[\s\S]*?addEventListener\('click', dismiss\)/.test(hudSource),
+  ok(/showText[\s\S]*?setOverlayClick\(function dismiss/.test(hudSource),
     'full-screen text panels can be dismissed with a tap');
   ok(/function backdrop[\s\S]*?pushKey\('Escape'\)/.test(hudSource),
     'menus can be cancelled by tapping the backdrop, the touch equivalent of Esc');
