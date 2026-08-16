@@ -113,6 +113,9 @@
 
   function onKeyDown(e) {
     if (!overlayOpen) return;         // input.js owns the keyboard in flight
+    /* a focused text field is typing, not choosing a menu letter */
+    var tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (e.metaKey) return;
     if (e.ctrlKey && ['c', 'v', 'r', 'C', 'V', 'R'].indexOf(e.key) >= 0) return;
     var k = normalizeKey(e);
@@ -186,7 +189,14 @@
     overlay.innerHTML = '';
     overlay.appendChild(node);
 
+    /* Tapping the backdrop is the touch equivalent of Escape - otherwise a
+       menu with nothing you want on it has no way out without a keyboard.
+       Only the backdrop itself: a tap that lands on the menu is a choice. */
+    function backdrop(ev) { if (ev.target === overlay) hud.pushKey('Escape'); }
+    overlay.addEventListener('click', backdrop);
+
     function close(result) {
+      overlay.removeEventListener('click', backdrop);
       overlay.classList.add('hidden');
       overlay.innerHTML = '';
       overlayOpen = false;
@@ -215,9 +225,20 @@
     });
     overlay.innerHTML = '';
     overlay.appendChild(buildMenu(title, rows, {
-      full: true, footerText: footer || '(Press any key to continue)'
+      full: true,
+      footerText: footer || (hud.isTouchDevice()
+        ? '(Tap to continue)' : '(Press any key to continue)')
     }));
+
+    /* A tap counts as the any-key.  Without this every full-screen text
+       panel - the help, the ship readout, the score table, and the death
+       screen you cannot get past - is a dead end on a phone.  `click` rather
+       than a touch event, so scrolling a long panel does not dismiss it. */
+    function dismiss() { hud.pushKey(' '); }
+    overlay.addEventListener('click', dismiss);
+
     return hud.getKey().then(function () {
+      overlay.removeEventListener('click', dismiss);
       overlay.classList.add('hidden');
       overlay.innerHTML = '';
       overlayOpen = false;
@@ -243,40 +264,94 @@
     return c;
   }
 
+  /* Text entry uses a real <input>.
+   *
+   * The original drew its own caret and read the keystrokes this module was
+   * already intercepting, which works perfectly on a keyboard and traps you
+   * completely on a phone: nothing is focused, so no on-screen keyboard ever
+   * appears, and the only prompt in the game you cannot skip is the one
+   * standing between you and starting a run.
+   *
+   * A focused input is also the only way to get autocapitalisation, the
+   * platform's own editing and a "go" key on the virtual keyboard.  The field
+   * is deliberately large and obviously tappable, because a browser may
+   * refuse to focus it without a fresh user gesture - in which case the
+   * player taps it and the keyboard appears anyway. */
   hud.getLine = function (prompt, maxLen) {
     maxLen = maxLen || 40;
     overlay.classList.remove('hidden');
     overlayOpen = true;
     if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
-    var buf = '';
 
-    function draw() {
-      overlay.innerHTML = '';
-      overlay.appendChild(buildMenu(prompt, [
-        { text: '', html: '<span class="entry">' + escapeHtml(buf) + '<span class="caret">_</span></span>' }
-      ], { footerText: '(Enter to accept, Esc to cancel)' }));
-    }
-    draw();
+    overlay.innerHTML = '';
+    var box = document.createElement('div');
+    box.className = 'menu';
+    box.innerHTML =
+      '<div class="mtitle">' + escapeHtml(prompt) + '</div>' +
+      '<form class="entryform" autocomplete="off">' +
+        '<input class="entryinput" type="text" maxlength="' + maxLen + '" ' +
+          'autocomplete="off" autocorrect="off" autocapitalize="words" ' +
+          'spellcheck="false" enterkeyhint="go" aria-label="' + escapeHtml(prompt) + '">' +
+        '<div class="entrybtns">' +
+          '<button type="submit" class="ebtn ok">OK</button>' +
+          '<button type="button" class="ebtn cancel">Cancel</button>' +
+        '</div>' +
+      '</form>' +
+      '<div class="mfoot">(Enter to accept, Esc to cancel)</div>';
+    overlay.appendChild(box);
 
-    function close(result) {
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-      overlayOpen = false;
-      return result;
-    }
+    var input = box.querySelector('.entryinput');
+    var form = box.querySelector('.entryform');
 
-    return (function loop() {
-      return hud.getKey().then(function (k) {
-        if (k === 'Escape') return close(null);
-        if (k === 'Enter') return close(buf);
-        if (k === 'Backspace') buf = buf.slice(0, -1);
-        else if (k.length === 1 && buf.length < maxLen) buf += k;
-        draw();
-        return loop();
+    return new Promise(function (resolve) {
+      function close(result) {
+        /* blur first, or the on-screen keyboard outlives the prompt */
+        try { input.blur(); } catch (e) { /* ignore */ }
+        overlay.classList.add('hidden');
+        overlay.innerHTML = '';
+        overlayOpen = false;
+        resolve(result);
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        close(input.value.trim());
       });
-    })();
+      box.querySelector('.cancel').addEventListener('click', function (e) {
+        e.preventDefault();
+        close(null);
+      });
+      /* keystrokes belong to the field, not to the menu key handler */
+      input.addEventListener('keydown', function (e) {
+        e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); close(null); }
+      });
+
+      /* Tapping beside the field blurs it, and then Enter and Escape have
+         nowhere to go - so any tap on the prompt puts the caret back. */
+      overlay.addEventListener('mousedown', function (e) {
+        if (e.target !== input && !e.target.classList.contains('ebtn')) {
+          e.preventDefault();
+          focusSoon(input);
+        }
+      });
+
+      focusSoon(input);
+    });
   };
+
+  /* Ask for focus now and once more on the next frame.  Some mobile browsers
+     ignore a focus() that lands too far from the gesture that caused it; the
+     retry costs nothing and catches the common case where the first attempt
+     was a fraction too early. */
+  function focusSoon(el) {
+    function go() {
+      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    }
+    go();
+    window.setTimeout(go, 50);
+  }
 
   /* ------------------------------------------------------------------ */
   /* on-screen controls                                                 */

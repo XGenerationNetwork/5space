@@ -175,6 +175,15 @@ rather than tiles scales with it. The gauges and status readout keep out from un
 the thumb pads — which sit in the *corners*, so in landscape the energy bar stays at
 the bottom between them, and only in portrait does it climb above.
 
+**Every prompt has to be answerable by tap.** A prompt blocks until it is answered,
+so one that only listens for keystrokes is not awkward on a phone, it is a wall. The
+name prompt drew its own caret and read intercepted keys, so nothing was focused, no
+on-screen keyboard ever appeared, and a run could not be started at all; the
+full-screen text panels waited on a keypress, which made the help, the readouts and —
+worst — the death screen unrecoverable. So: text entry is a real focused `<input>`
+(17px, because iOS zooms the page in on anything smaller), full-screen panels accept
+a tap as the any-key, and tapping a menu's backdrop is the touch equivalent of Esc.
+
 ## Saving
 
 Autosaves every twenty seconds, on every sector change, and whenever the tab is

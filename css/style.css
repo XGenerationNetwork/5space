@@ -161,6 +161,53 @@ html, body {
 .logo { color: #56d0ff; white-space: pre; }
 .hi { color: var(--gold); }
 
+/* ---- text entry ------------------------------------------------------ */
+
+.entryform { margin: 6px 0 2px; }
+
+/* Big enough to be an obvious tap target: if a browser declines to focus it
+   automatically, tapping it is the fallback that always works. */
+.entryinput {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  background: rgba(4, 8, 14, 0.9);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 17px;              /* under 16px and iOS zooms the page in */
+  letter-spacing: 0.04em;
+  outline: none;
+  /* the page suppresses selection; a text field needs it back */
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+
+.entryinput:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 210, 74, 0.2); }
+
+.entrybtns { display: flex; gap: 10px; margin-top: 12px; }
+
+.ebtn {
+  flex: 1;
+  padding: 12px 18px;
+  background: rgba(20, 32, 48, 0.9);
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ebtn.ok { background: var(--accent); border-color: var(--accent); color: #04121c; }
+.ebtn:active { transform: scale(0.98); }
+.ebtn.ok:active { background: var(--gold); }
+
 .entry { color: #fff; }
 .caret { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }

@@ -1302,6 +1302,40 @@ function stageInput() {
   }
   ok(buttons > 10, 'the touch layer offers the full command set (' + buttons + ' buttons)');
 
+  /* ---- no keyboard-only dead ends ------------------------------------ */
+
+  /* Every prompt in the game blocks until it is answered, and on a phone the
+     only ways to answer are a tap and the on-screen keyboard.  A prompt that
+     offers neither is not awkward, it is a wall: the name prompt used to draw
+     its own caret and read intercepted keystrokes, so nothing was ever
+     focused, no keyboard appeared, and a run could not be started at all.
+     The full-screen text panels had the same problem - including the death
+     screen, which made dying on a phone unrecoverable.
+
+     The harness has no DOM, so this is a source-level guard; the behaviour
+     itself is verified in a browser.  It is here to state the requirement and
+     to fail loudly if any of the three touch paths is removed. */
+  const hudSource = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
+
+  ok(/getLine[\s\S]*?<input/.test(hudSource),
+    'the text prompt uses a real input, so a phone raises its keyboard');
+  ok(/enterkeyhint/.test(hudSource),
+    'the text prompt asks for a "go" key on the on-screen keyboard');
+  ok(/focusSoon\(input\)/.test(hudSource),
+    'the text prompt takes focus rather than waiting to be found');
+  ok(/showText[\s\S]*?addEventListener\('click', dismiss\)/.test(hudSource),
+    'full-screen text panels can be dismissed with a tap');
+  ok(/function backdrop[\s\S]*?pushKey\('Escape'\)/.test(hudSource),
+    'menus can be cancelled by tapping the backdrop, the touch equivalent of Esc');
+  ok(/tagName;[\s\S]*?'INPUT'/.test(hudSource),
+    'the menu key handler stands aside for a focused text field');
+
+  /* At least 16px, or mobile Safari zooms the whole page in on focus. */
+  const cssSource = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8');
+  const fieldSize = /\.entryinput\b[^}]*font-size:\s*(\d+)px/.exec(cssSource);
+  ok(fieldSize && Number(fieldSize[1]) >= 16,
+    'the text field is at least 16px, so mobile Safari does not zoom the page');
+
   K.clear();
   K.takeActions();
 }
