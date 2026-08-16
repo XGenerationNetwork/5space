@@ -552,6 +552,19 @@
     }
   }
 
+  /* A wormhole's pull follows Continuum's inverse-square law, and inside
+     about eleven tiles it beats any hull's thrust outright - a fully prized
+     Warbird on full afterburner cannot climb out.  That is fine, and it is
+     the point: a wormhole is not an obstacle to be escaped, it is a thing
+     that moves you.  But it makes the destination a safety-critical number.
+     Anything dropped inside that radius is dropped into a trap, and if the
+     destination is another wormhole's mouth the two of them will throw a ship
+     back and forth for as long as the sector exists. */
+  var WORMHOLE_ESCAPE = 12;         // tiles: thrust starts to win out here
+  var WORMHOLE_SAFE_DIST = 26;      // tiles: how far a destination must sit
+  SS.WORMHOLE_ESCAPE = WORMHOLE_ESCAPE;
+  SS.WORMHOLE_SAFE_DIST = WORMHOLE_SAFE_DIST;
+
   function placeWormholes(sec, t) {
     var count = SS.rn2(3) + (t > 0.4 ? 1 : 0);
     for (var i = 0; i < count; i++) {
@@ -565,17 +578,59 @@
           }
         }
       }
-      sec.wormholes.push({ x: spot.x + 0.5, y: spot.y + 0.5, radius: 14, dest: null });
+      sec.wormholes.push({
+        x: spot.x + 0.5, y: spot.y + 0.5,
+        dest: null, nextSwitch: 0
+      });
     }
-    /* Each wormhole spits you out at another one, or somewhere random if it
-       is the only hole in the sector. */
-    sec.wormholes.forEach(function (w, i) {
-      if (sec.wormholes.length > 1) {
-        var j = (i + 1 + SS.rn2(sec.wormholes.length - 1)) % sec.wormholes.length;
-        w.dest = { x: sec.wormholes[j].x, y: sec.wormholes[j].y };
-      }
-    });
+    retargetWormholes(sec, true);
   }
+
+  /* Where a wormhole throws you: open space, well clear of every wormhole in
+     the sector - including itself.  Continuum re-rolls this on a timer rather
+     than wiring holes to each other permanently, which is both what the
+     WormholeSwitchTime setting is for and the reason a wormhole never becomes
+     a predictable shuttle service. */
+  function wormholeDestination(sec) {
+    var best = null, bestClearance = -1;
+    for (var attempt = 0; attempt < 300; attempt++) {
+      /* room to arrive at speed, and the wormhole check done here rather than
+         in the helper so the near-misses can be ranked */
+      var spot = SS.randomOpenSpot(sec, { clearance: 4, minWormholeDist: 0 });
+      var clearance = distanceToNearestWormhole(sec, spot);
+      if (clearance >= WORMHOLE_SAFE_DIST) return spot;
+      if (clearance > bestClearance) { bestClearance = clearance; best = spot; }
+    }
+    /* A cramped sector might have nowhere that far from every hole; take the
+       roomiest spot found rather than dropping someone down a well. */
+    return best || { x: sec.size / 2, y: sec.size / 2 };
+  }
+  SS.wormholeDestination = wormholeDestination;
+
+  function distanceToNearestWormhole(sec, pos) {
+    var best = Infinity;
+    for (var i = 0; i < sec.wormholes.length; i++) {
+      var d = SS.dist(pos, sec.wormholes[i]);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+  SS.distanceToNearestWormhole = distanceToNearestWormhole;
+
+  function retargetWormholes(sec, force) {
+    for (var i = 0; i < sec.wormholes.length; i++) {
+      var w = sec.wormholes[i];
+      if (!force && sec.clock < w.nextSwitch) continue;
+      w.dest = wormholeDestination(sec);
+      w.nextSwitch = sec.clock + SS.ARENA.WormholeSwitchTime;
+    }
+  }
+  SS.retargetWormholes = retargetWormholes;
+
+  /* Called once per tick from the game loop. */
+  Sector.prototype.tickWormholes = function () {
+    retargetWormholes(this, false);
+  };
 
   function placePortals(sec, depth) {
     var up = findOpenArea(sec, 6);
@@ -772,19 +827,44 @@
 
   SS.findOpenArea = findOpenArea;
 
-  /* A random spot a ship can legally sit in, optionally away from a point. */
+  /* A random spot a ship can legally sit in.
+   *
+   * Wormhole clearance is a *default*, not an option, because every caller
+   * here is putting a ship somewhere - spawning a pilot, warping the hero,
+   * ejecting someone from a safe pad - and a wormhole's pull beats any hull's
+   * thrust well before you reach it.  Dropping a ship inside one is never
+   * what the caller meant, so the helper refuses to do it unless asked.
+   *
+   * Options: away/minDist keep clear of a point, clearance sets how much
+   * open space is needed, insideBase:false stays out of buildings,
+   * minWormholeDist:0 opts out of the wormhole check entirely.
+   */
   SS.randomOpenSpot = function (sec, opts) {
     opts = opts || {};
     var minDist = opts.minDist || 0;
+    var clearance = opts.clearance || 2;
+    var wormholeDist = opts.minWormholeDist !== undefined
+      ? opts.minWormholeDist
+      : WORMHOLE_ESCAPE;
+
+    /* Track the roomiest near-miss: a sector crowded with wells may have
+       nowhere that satisfies everything, and returning the map centre would
+       be worse than returning the best spot actually found. */
+    var fallback = null, fallbackClearance = -1;
+
     for (var attempt = 0; attempt < 600; attempt++) {
       var x = SS.rn1(SIZE - 20, 10), y = SS.rn1(SIZE - 20, 10);
-      if (!clearAround(sec, x, y, 2)) continue;
+      if (!clearAround(sec, x, y, clearance)) continue;
       var pos = { x: x + 0.5, y: y + 0.5 };
       if (opts.away && SS.dist(pos, opts.away) < minDist) continue;
       if (opts.insideBase === false && insideAnyBase(sec, x, y)) continue;
-      return pos;
+
+      if (!wormholeDist) return pos;
+      var gap = distanceToNearestWormhole(sec, pos);
+      if (gap >= wormholeDist) return pos;
+      if (gap > fallbackClearance) { fallbackClearance = gap; fallback = pos; }
     }
-    return { x: SIZE / 2, y: SIZE / 2 };
+    return fallback || { x: SIZE / 2, y: SIZE / 2 };
   };
 
   function insideAnyBase(sec, x, y) {

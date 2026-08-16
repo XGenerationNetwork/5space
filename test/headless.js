@@ -898,6 +898,185 @@ function stageBalance(budget) {
   SS.input.firingGun = () => false;
 }
 
+/* Wormholes.
+ *
+ * This stage exists because of a bug that shipped: a wormhole's destination
+ * was the exact centre of another wormhole, so a ship that flew into one was
+ * thrown into the mouth of the next, pinned there by a pull no hull can
+ * out-thrust, and thrown back again when the re-entry timer expired.  Thirty
+ * eight teleports in thirty seconds, forever.
+ *
+ * The invariant that makes that impossible is simple and worth stating: a
+ * ship is never *placed* anywhere it cannot leave under its own power. */
+function stageWormholes(budget) {
+  const seeds = Math.max(8, budget * 3);
+
+  /* ---- destinations are outside every well --------------------------- */
+
+  let holes = 0, worst = Infinity, inTrap = 0;
+  for (let s = 0; s < seeds; s++) {
+    SS.rng.seed(6100 + s);
+    SS.ship.resetIds(1);
+    [1, 9, 19, 26].forEach((depth) => {
+      const sec = SS.makeSector(depth);
+      sec.wormholes.forEach((w) => {
+        holes++;
+        ok(!!w.dest, 'every wormhole has a destination');
+        if (!w.dest) return;
+        const gap = SS.distanceToNearestWormhole(sec, w.dest);
+        if (gap < worst) worst = gap;
+        if (gap < SS.WORMHOLE_ESCAPE) inTrap++;
+        ok(!sec.solidAtPos(w.dest.x, w.dest.y),
+          'a wormhole destination is in open space');
+      });
+    });
+  }
+  ok(holes > 10, 'the sample actually contained wormholes (' + holes + ')');
+  eq(inTrap, 0, 'no destination lands inside a well a ship cannot escape');
+  ok(worst >= SS.WORMHOLE_ESCAPE,
+    'the closest destination to a well is ' + worst.toFixed(1) +
+    ' tiles (escape threshold ' + SS.WORMHOLE_ESCAPE + ')');
+
+  /* ---- the helper that places ships refuses to drop them in a well ---- */
+
+  SS.rng.seed(6001);
+  const sec = firstSectorWithWormholes(1);
+  ok(!!sec, 'found a sector with a wormhole to test against');
+  if (sec) {
+    let unsafe = 0;
+    for (let i = 0; i < 300; i++) {
+      const spot = SS.randomOpenSpot(sec, {});
+      if (SS.distanceToNearestWormhole(sec, spot) < SS.WORMHOLE_ESCAPE) unsafe++;
+    }
+    eq(unsafe, 0, 'randomOpenSpot never places a ship inside a well by default');
+
+    /* and the opt-out still works, or wormholeDestination could not rank */
+    let sawClose = false;
+    for (let i = 0; i < 400 && !sawClose; i++) {
+      const spot = SS.randomOpenSpot(sec, { minWormholeDist: 0 });
+      if (SS.distanceToNearestWormhole(sec, spot) < SS.WORMHOLE_ESCAPE) sawClose = true;
+    }
+    ok(sawClose, 'minWormholeDist:0 opts out of the wormhole check');
+  }
+
+  /* ---- the loop itself ------------------------------------------------ */
+
+  const idle = () => ({ forward: false, backward: false, left: false, right: false, afterburner: false });
+  SS.input.flight = idle;
+  SS.input.firingGun = () => false;
+  SS.input.takeActions = () => [];
+
+  const seed = seedWithWormholes(2);
+  ok(seed > 0, 'found a sector with two or more wormholes');
+  if (seed > 0) {
+    const g = SS.game;
+    const p = g.player;
+    const world = g.sector;
+    p.x = world.wormholes[0].x;
+    p.y = world.wormholes[0].y;
+    p.vx = 0; p.vy = 0;
+    p.timer.spawnGuard = 0;
+    p.inWormhole = false;
+
+    let transits = 0;
+    const realMsg = SS.msg;
+    SS.msg = (t) => { if (/wormhole/i.test(t)) transits++; };
+    for (let i = 0; i < 100 * 60 && !g.over; i++) g.step(SS.TICK_DT);
+    SS.msg = realMsg;
+
+    ok(transits >= 1, 'a wormhole does still take a ship that flies into it');
+    ok(transits <= 3,
+      'sitting in a wormhole does not teleport you over and over (' +
+      transits + ' transits in 60s; the bug produced 38 in 30s)');
+    ok(SS.distanceToNearestWormhole(world, p) > SS.WORMHOLE_ESCAPE,
+      'the ship ends up somewhere it can fly away from');
+    g.over = true; g.ended = true;
+  }
+
+  /* ---- pilots go through too, instead of piling up -------------------- */
+
+  const seed2 = seedWithWormholes(1);
+  if (seed2 > 0) {
+    const g = SS.game;
+    const world = g.sector;
+    const w = world.wormholes[0];
+    const before = world.enemies.length;
+    for (let i = 0; i < 6; i++) {
+      world.enemies.push(SS.makeEnemy(SS.enemyByKey('rookie'), world,
+        w.x + (i - 3) * 0.7, w.y, world.depth));
+    }
+    eq(world.enemies.length, before + 6, 'parked six pilots on the well');
+    g.player.x = 20; g.player.y = 20;
+    for (let i = 0; i < 100 * 45 && !g.over; i++) g.step(SS.TICK_DT);
+
+    const pinned = world.enemies.filter(
+      (e) => e.alive && SS.distanceToNearestWormhole(world, e) < 3).length;
+    eq(pinned, 0, 'no pilot is left pinned inside a well');
+    g.over = true; g.ended = true;
+  }
+
+  /* ---- the destination moves on WormholeSwitchTime -------------------- */
+
+  const seed3 = seedWithWormholes(1);
+  if (seed3 > 0) {
+    const g = SS.game;
+    const world = g.sector;
+    const start = world.wormholes[0].dest;
+    ok(!!start, 'a wormhole is aimed somewhere before the switch timer runs');
+    if (start) {
+      const first = { x: start.x, y: start.y };
+      g.player.x = 20; g.player.y = 20;
+      const ticks = Math.ceil((SS.ARENA.WormholeSwitchTime + 2) * 100);
+      for (let i = 0; i < ticks && !g.over; i++) g.step(SS.TICK_DT);
+      const now = world.wormholes[0].dest;
+      ok(now && SS.dist(first, now) > 1,
+        'a wormhole re-aims itself every WormholeSwitchTime seconds');
+    }
+    g.over = true; g.ended = true;
+  }
+
+  /* ---- and it still flings you --------------------------------------- */
+
+  const seed4 = seedWithWormholes(1);
+  if (seed4 > 0) {
+    const g = SS.game;
+    const world = g.sector;
+    const p = g.player;
+    const w = world.wormholes[0];
+    if (!w.dest) ok(false, 'a wormhole with no destination cannot throw anything');
+    p.x = w.x; p.y = w.y; p.vx = 6; p.vy = 0;
+    p.timer.spawnGuard = 0; p.inWormhole = false;
+    const from = { x: p.x, y: p.y };
+    const speedBefore = SS.length(p.vx, p.vy);
+    g.step(SS.TICK_DT);
+    ok(SS.dist(from, p) > 20, 'a wormhole throws you a long way (' +
+      SS.dist(from, p).toFixed(0) + ' tiles)');
+    ok(Math.abs(SS.length(p.vx, p.vy) - speedBefore) < 0.6,
+      'momentum is carried through, as it is in the original');
+    ok(!world.solidAtPos(p.x, p.y), 'you do not arrive inside a wall');
+    g.over = true; g.ended = true;
+  }
+
+  function seedWithWormholes(minCount) {
+    for (let s = 1; s < 300; s++) {
+      SS.rng.seed(s);
+      SS.game.newGame({ name: 'Wormhole', shipKey: 'warbird', seed: s });
+      if (SS.game.sector.wormholes.length >= minCount) return s;
+    }
+    return 0;
+  }
+
+  function firstSectorWithWormholes(minCount) {
+    for (let s = 1; s < 200; s++) {
+      SS.rng.seed(5000 + s);
+      SS.ship.resetIds(1);
+      const candidate = SS.makeSector(12);
+      if (candidate.wormholes.length >= minCount) return candidate;
+    }
+    return null;
+  }
+}
+
 /* The keyboard.
  *
  * This stage exists because of a bug that shipped: holding a WASD key, then
@@ -1190,6 +1369,7 @@ const STAGES = {
   pilot: stagePilot,
   play: stagePlay,
   balance: stageBalance,
+  wormholes: stageWormholes,
   input: stageInput,
   deploy: stageDeploy,
   docs: stageDocs

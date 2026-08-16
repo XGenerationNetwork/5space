@@ -161,6 +161,7 @@
     game.elapsed += dt;
 
     sec.tickDoors(dt);
+    sec.tickWormholes();
     sec.expireBricks();
 
     var flight = SS.input.flight();
@@ -322,16 +323,53 @@
 
   /* ---- wormholes and portals ------------------------------------------- */
 
+  /* Move one ship through a wormhole, if it is in the mouth of one and has
+     not already been taken by it.
+   *
+   * The re-arm is spatial, not a countdown.  A timer only works if the ship
+   * can get clear before it expires, and inside a well nothing can: the pull
+   * beats any hull's thrust, so a ship dropped near a mouth is simply taken
+   * again the moment the timer runs out.  Requiring the ship to actually
+   * leave every well before it can be grabbed again is the condition that
+   * cannot loop.  With destinations now placed clear of every hole, this is
+   * belt and braces - but it is the belt.
+   *
+   * Momentum is conserved, as it is in the original: a wormhole flings you,
+   * it does not park you. */
+  function wormholeTransit(sec, sh) {
+    var w = SS.physics.wormholeAt(sec, sh.x, sh.y);
+    if (!w) {
+      sh.inWormhole = false;         // clear of them all: re-arm
+      return null;
+    }
+    if (sh.inWormhole || sh.timer.spawnGuard > 0) return null;
+
+    var dest = w.dest || SS.wormholeDestination(sec);
+    sh.x = dest.x;
+    sh.y = dest.y;
+    sh.inWormhole = true;
+    return dest;
+  }
+
   function checkWormholes(sec, p) {
-    var w = SS.physics.wormholeAt(sec, p.x, p.y);
-    if (!w || p.timer.spawnGuard > 0) return;
-    var dest = w.dest || SS.randomOpenSpot(sec, { away: p, minDist: 40 });
-    p.x = dest.x; p.y = dest.y;
-    p.vx *= 0.4; p.vy *= 0.4;
-    p.timer.spawnGuard = 0.8;
-    SS.render.flash(dest.x, dest.y, '#a060ff');
-    SS.msg('The wormhole spits you out somewhere else.', '#c9a0ff');
-    SS.radar.revealAround(sec, dest.x, dest.y, 18);
+    var dest = wormholeTransit(sec, p);
+    if (dest) {
+      SS.render.flash(dest.x, dest.y, '#a060ff');
+      SS.msg('The wormhole spits you out somewhere else.', '#c9a0ff');
+      SS.radar.revealAround(sec, dest.x, dest.y, 18);
+    }
+
+    /* Pilots go through them too.  They were always subject to the gravity
+       and never to the transit, so every well in the sector quietly filled up
+       with ships that could not thrust their way back out and were never
+       thrown clear - a hazard that ate the sector's population. */
+    for (var i = 0; i < sec.enemies.length; i++) {
+      var e = sec.enemies[i];
+      if (!e.alive) continue;
+      if (wormholeTransit(sec, e)) {
+        e.patrolTarget = null;       // wherever it was going, it is not there now
+      }
+    }
   }
 
   function checkPortals(sec, p) {

@@ -194,6 +194,10 @@ script list comes out of `play.html`, so the two cannot drift apart — and chec
   time and on greens collected, not the median: survival is strongly bimodal —
   the autopilot either dies early or rides out the whole window — so the median
   jumps between the two humps with the sample size and makes for a flaky test
+- **wormholes** — that no wormhole aims at a place a ship cannot leave under
+  its own power, that sitting in one does not teleport you repeatedly, that
+  pilots pass through instead of piling up in the well, and that one still
+  flings you a long way with your momentum intact
 - **input** — every way a key can go down under one set of modifiers and come
   up under another: WASD released while Shift is held, Caps Lock, both Shift
   keys, losing focus mid-turn, Ctrl+S versus a bare S, and one-shots firing
@@ -202,6 +206,19 @@ script list comes out of `play.html`, so the two cannot drift apart — and chec
   other host; `.nojekyll` is present; the bundle is genuinely single-file
 - **docs** — every key the game accepts is documented on the welcome page, and
   every key the page promises exists
+
+The bug that motivated the **wormholes** stage came down to one invariant that
+had never been written down: *a ship is never placed anywhere it cannot leave
+under its own power*. A wormhole's pull follows Continuum's inverse-square law
+and beats any hull's thrust inside about twelve tiles, so where a wormhole aims
+is safety-critical — and each one was aimed at the exact centre of another
+wormhole. Fly into one and you were thrown into the mouth of the next, pinned
+by a pull no engine can out-thrust, and thrown back when the re-entry timer
+expired: thirty-eight teleports in thirty seconds, indefinitely. Destinations
+are now placed clear of every well and re-rolled on `WormholeSwitchTime`, the
+re-arm is spatial rather than a countdown (a timer cannot help when the ship
+has no way to get clear before it expires), and `randomOpenSpot` enforces the
+invariant for every caller that places a ship, not just this one.
 
 The bug that motivated the **input** stage is worth spelling out, because it is
 easy to write again. `event.key` reports the *character produced*, not the key
