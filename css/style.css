@@ -296,7 +296,9 @@ html, body {
   font-size: 11px;
 }
 
-/* The limited-use stock, climbing away from BOMB.
+#touch .tpad-right .mine { right: 8px; bottom: 176px; width: 86px; height: 44px; font-size: 11px; }
+
+/* The rest of the stock, climbing away from MINE.
    column-reverse so the first button in the array is the lowest one, and
    wrap so a short landscape phone gets a second column instead of a stack
    that runs off the top of the screen and under the radar.  The height it is
@@ -305,7 +307,7 @@ html, body {
 #touch .tstack {
   position: absolute;
   right: 8px;
-  bottom: 176px;
+  bottom: 226px;
   display: flex;
   flex-direction: column-reverse;
   flex-wrap: wrap-reverse;
@@ -342,6 +344,10 @@ html, body {
   border-radius: 8px;
 }
 
+/* Too small to place the stock anywhere without collisions: it stays in GEAR,
+   which is where it was before the pad had it. */
+#touch.no-stack .tstack { display: none; }
+
 /* Narrow portrait: PORT stacks on top of BOOST rather than reaching across
    the screen into the d-pad.  Set by layoutTouch when the two actually meet. */
 #touch.port-up .tpad-right .portal { right: 116px; bottom: 94px; }
@@ -355,10 +361,16 @@ html, body {
   right: auto;
   left: calc(env(safe-area-inset-left, 0px) + 10px);
   top: calc(env(safe-area-inset-top, 0px) + 72px);
+  /* A row, not a column: stacked vertically these three reach 174px down the
+     left edge, which is into the d-pad on a 320px-tall phone.  Lying on their
+     side they are 30px tall and clear it at every size, and the left edge has
+     the width to spare because the d-pad is only 150 wide. */
+  flex-direction: row;
 }
 #touch.ttop-left .tgear-panel {
   right: auto;
-  left: calc(env(safe-area-inset-left, 0px) + 72px);
+  left: calc(env(safe-area-inset-left, 0px) + 10px);
+  top: calc(env(safe-area-inset-top, 0px) + 112px);
 }
 
 /* everything else, behind one toggle, opening inward from that column */
@@ -395,8 +407,31 @@ html, body {
 #touch.compact .tpad-right .bomb { bottom: 100px; width: 74px; height: 44px; font-size: 11px; }
 #touch.compact .tpad-right .boost { right: 92px; bottom: 16px; width: 58px; height: 58px; border-radius: 29px; font-size: 11px; }
 #touch.compact .tpad-right .portal { right: 156px; bottom: 20px; width: 50px; height: 50px; border-radius: 25px; font-size: 10px; }
-#touch.compact .tstack { bottom: 150px; gap: 5px; }
+#touch.compact .tpad-right .mine { right: 8px; bottom: 150px; width: 74px; height: 36px; font-size: 10px; }
+#touch.compact .tstack { bottom: 191px; gap: 5px; }
 #touch.compact .tstack .tbtn { width: 74px; height: 36px; font-size: 10px; }
+
+/* Landscape on a phone: there is no vertical room for a ladder, but there is
+   a whole empty strip along the bottom between the two thumbs.  The stock
+   becomes a row of circles running left from PORT, in the same order the
+   column had - nearest first, so REPEL stays closest to the thumb either way.
+
+   Applied by layoutTouch, and only after it has checked the row actually
+   clears the d-pad; on a very short phone it falls back to the ladder. */
+#touch.row-bottom .tstack {
+  right: 214px;
+  bottom: 24px;
+  flex-direction: row-reverse;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+#touch.row-bottom .tstack .tbtn {
+  width: 46px;
+  height: 46px;
+  border-radius: 23px;
+  font-size: 9px;
+  letter-spacing: 0;
+}
 
 #touch.compact .ttop .tbtn { min-width: 52px; height: 30px; font-size: 11px; }
 #touch.compact .tgear-panel {

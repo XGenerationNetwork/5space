@@ -206,37 +206,59 @@ sector 18 — it just does not end the run for it.
 ## Touch
 
 On anything reporting a touch screen, an on-screen control layer appears: a d-pad
-under the left thumb, FIRE / BOMB / BOOST / PORT under the right, a ladder of six
-utility buttons climbing from BOMB — MINE, REPEL, BURST, DECOY, MULTI, WARP — and a
-GEAR panel holding the rest of the command set. `?touch=1` forces it on anywhere,
-which is how it gets tested from a desktop; `?touch=0` forces it off.
+under the left thumb, FIRE / BOMB / BOOST / PORT under the right, MINE directly
+above BOMB, a group of five more — REPEL, BURST, DECOY, MULTI, WARP — and a GEAR
+panel holding the rest of the command set. `?touch=1` forces it on anywhere, which
+is how it gets tested from a desktop; `?touch=0` forces it off.
 
-The ladder is the answer to a specific problem: the things you need when something
+Those five are the answer to a specific problem: the things you need when something
 is already on top of you were all behind the GEAR toggle, which is two taps and a
 panel covering the screen at exactly the wrong moment. They are duplicated rather
-than moved — everything on the ladder is still in GEAR, because a player who
-learned one route should not find the other emptied out.
+than moved — every one of them is still in GEAR, because a player who learned one
+route should not find the other emptied out.
 
-Six extra buttons is more than the right-hand edge of a phone actually has, so the
-layout has to give somewhere, and it does that by measuring rather than by
-guessing at breakpoints:
+Five extra buttons is more than the edge of a phone actually has, so the layout has
+to give somewhere. It has three arrangements and picks between them by measuring,
+not by guessing at breakpoints:
 
-- **The ladder wraps.** It is a flex column with a max-height set from the measured
-  gap between the radar and BOMB. On a tablet that is one clean column of six; on a
-  phone held sideways there is only ~110px of it, and the same column folds into
-  three short ones. The bottom-to-top order is identical either way, because the
-  point of a ladder is that the rungs do not move.
-- **MAP/GEAR/menu yields.** When the ladder and that column genuinely intersect,
-  the infrequent one moves to the left edge under the status readout. It only
-  happens when the ladder cannot otherwise be one column, so a tablet keeps the
-  original arrangement.
-- **PORT climbs.** It sits outboard of BOOST, which on a 375px-wide portrait phone
-  puts it exactly on top of the d-pad's turn-right key. When those two overlap,
-  PORT goes above BOOST instead of beside it.
+- **A ladder**, climbing from MINE up the right edge. The default, and what a
+  tablet or a phone in portrait gets. It is a flex column with a max-height set
+  from the measured gap between the radar and MINE, so it wraps into extra columns
+  rather than running off the top of the screen.
+- **A bottom row** of circles running left from PORT, in the same nearest-first
+  order. A phone held sideways is ~390px tall and has no room for a ladder, but it
+  has a whole empty strip along the bottom between the thumbs. Used only after
+  checking the row clears the d-pad.
+- **Withdrawn.** At 568×320 the radar reaches 102px down and the pads start at
+  119px; five buttons do not fit in the 17px between, and the row would reach into
+  the d-pad. Rather than ship overlapping controls, the shortcut disappears and
+  GEAR carries them, which is where they lived before.
 
-All three are decided in `layoutTouch` by intersecting bounding boxes, not by a
-width breakpoint, because what actually matters is whether two controls collide —
-and that depends on the safe-area insets and the radar as much as on the width.
+Two smaller adjustments work the same way. **MAP/GEAR/menu yields** to the left
+edge when the right one is spoken for, and lies on its side there because stacked
+vertically it reaches into the d-pad on a short phone. **PORT climbs** on top of
+BOOST when sitting outboard of it would put it on the d-pad's turn-right key, which
+is what happens at 375px wide.
+
+Everything above is decided in `layoutTouch` by intersecting bounding boxes,
+because what actually matters is whether two controls collide — and that depends on
+the safe-area insets and the radar as much as on the width. Two consequences worth
+knowing if you touch it:
+
+- **It runs twice, a frame apart.** During a resize or a rotation the first
+  measurement can land while the viewport is still settling, which showed up as the
+  bottom row staying put at a size where it overlapped the d-pad.
+- **The withdrawal is cleared before anything is measured.** It is `display: none`,
+  so leaving it set from the previous viewport gives every button a zero rect,
+  which reads as "fits nowhere" — and once withdrawn it would never come back.
+
+The energy bar had to learn about all this too. It is drawn centred at a known
+width, and it climbs above the controls when they crowd the bottom edge; the amount
+it climbs is measured against the span it actually occupies, ignoring anything it
+merely grazes. Both halves matter: measuring the whole bottom edge lifted it into
+the vertical middle of a landscape phone and straight across the player's own ship,
+and counting a 15px graze against the utility column lifted it 240px in portrait
+for no reason.
 
 Three more things about it are less obvious than they look:
 

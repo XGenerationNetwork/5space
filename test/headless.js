@@ -1651,13 +1651,18 @@ function stageInput() {
   let sm;
   const stackRe = /\bact: '([a-z]+)'/g;
   while ((sm = stackRe.exec(stackBlock)) !== null) stackActs.push(sm[1]);
-  eq(stackActs.join(','), 'mine,repel,burst,decoy,multifire,warp',
-    'the stack reads bottom-to-top: mine, repel, burst, decoy, multifire, warp');
+  eq(stackActs.join(','), 'repel,burst,decoy,multifire,warp',
+    'the stock reads nearest-first: repel, burst, decoy, multifire, warp');
   stackActs.forEach(function (a) {
     ok(handled[a], 'stacked "' + a + '" names an action game.js handles');
   });
   ok(/act: 'portal', label: 'PORT'/.test(hudSrc),
     'PORT is a pad button rather than only a gear-panel entry');
+  /* MINE pairs with BOMB and stays put in every layout, so it belongs to the
+     pad rather than to the group that moves around. */
+  ok(/act: 'mine', label: 'MINE', cls: 'mine'/.test(hudSrc),
+    'MINE is a fixed pad button above BOMB, not part of the moving group');
+  ok(stackActs.indexOf('mine') < 0, 'and is therefore not in the moving group');
 
   /* Every stacked action is still reachable the old way.  Someone who learned
      the gear panel should not find it emptied out from under them. */
@@ -1676,12 +1681,29 @@ function stageInput() {
     'css can move the MAP/GEAR/menu column off the crowded edge');
   ok(/#touch\.port-up \.tpad-right \.portal/.test(cssSrc),
     'css can stack PORT above BOOST on a narrow screen');
-  ok(/classList\.add\('ttop-left'\)/.test(hudSrc) && /classList\.add\('port-up'\)/.test(hudSrc),
-    'layoutTouch actually applies both, rather than the css sitting unused');
+  ok(/#touch\.row-bottom \.tstack/.test(cssSrc),
+    'css can lay the stock out along the bottom edge for landscape');
+  ok(/#touch\.no-stack \.tstack \{ display: none/.test(cssSrc),
+    'css can withdraw the stock entirely when nothing fits');
+  ['ttop-left', 'port-up', 'row-bottom', 'no-stack'].forEach(function (c) {
+    ok(hudSrc.indexOf("classList.add('" + c + "')") >= 0,
+      'layoutTouch actually applies .' + c + ', rather than the css sitting unused');
+  });
   ok(/flex-wrap:\s*wrap-reverse/.test(cssSrc),
     'the stack wraps into columns instead of running off the top of the screen');
+  ok(/flex-direction:\s*row-reverse/.test(cssSrc),
+    'the bottom row runs right-to-left, so REPEL stays nearest the thumb');
   ok(/hud\.controlsOverlap/.test(hudSrc),
     'the decision is made by measuring overlap, not by a width breakpoint');
+
+  /* The withdrawal is display:none, so it has to be cleared before anything
+     is measured - a zero-sized button reads as "fits nowhere", which once made
+     the withdrawal permanent the first time a small viewport was seen. */
+  const layout = (hudSrc.match(/hud\.layoutTouch = function[\s\S]*?\n  \};/) || [''])[0];
+  const clearAt = layout.indexOf("classList.remove('no-stack')");
+  const measureAt = layout.indexOf('getBoundingClientRect');
+  ok(clearAt >= 0 && measureAt >= 0 && clearAt < measureAt,
+    'layoutTouch clears the withdrawal before it measures anything');
 
   /* ---- pause is a place you can leave -------------------------------- */
 

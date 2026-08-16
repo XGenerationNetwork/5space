@@ -502,18 +502,21 @@
       { hold: 'Control', label: 'FIRE', cls: 'fire' },
       { act: 'bomb', label: 'BOMB', cls: 'bomb' },
       { hold: 'Boost', label: 'BOOST', cls: 'boost' },
-      { act: 'portal', label: 'PORT', cls: 'portal' }
+      { act: 'portal', label: 'PORT', cls: 'portal' },
+      /* MINE pairs with BOMB and sits directly above it in every layout - the
+         two things you leave behind you, in the same column. */
+      { act: 'mine', label: 'MINE', cls: 'mine' }
     ] }
   ];
 
-  /* The limited-use stock, stacked upward from BOMB so the right thumb can
-     reach it without opening anything.  Listed bottom to top - the column is
-     laid out in reverse, so this array reads the way the buttons look.
+  /* The rest of the stock the right thumb should reach without opening
+     anything.  Listed nearest-first: in portrait this is a column climbing
+     from MINE, and in landscape it is a row of circles running left from PORT,
+     so "nearest" means lowest and rightmost respectively.
 
      These are all still in GEAR as well.  A duplicate button is cheap; a
      player who learned one route and cannot find the other is not. */
   var STACK = [
-    { act: 'mine', label: 'MINE' },
     { act: 'repel', label: 'REPEL' },
     { act: 'burst', label: 'BURST' },
     { act: 'decoy', label: 'DECOY' },
@@ -574,8 +577,14 @@
     touchLayer.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
     hud.layoutTouch();
-    window.addEventListener('resize', hud.layoutTouch);
-    window.addEventListener('orientationchange', hud.layoutTouch);
+    /* Twice, a frame apart.  Every decision below is made by measuring boxes,
+       and during a resize or a rotation the first measurement can land while
+       the viewport is still settling - which showed up as the bottom row
+       staying put at a size where it overlapped the d-pad, and correcting
+       itself the moment anything else forced a relayout.  The second pass is
+       idempotent when the first was already right. */
+    window.addEventListener('resize', relayout);
+    window.addEventListener('orientationchange', relayout);
   };
 
   function build() {
@@ -629,6 +638,12 @@
     var compact = Math.min(w, h) < 420 || h < 480;
     touchLayer.classList.toggle('compact', compact);
 
+    /* Clear the withdrawal before anything is measured.  It is display:none,
+       so leaving it on from the previous viewport gives every stack button a
+       zero rect - which reads as "fits nowhere" and keeps it withdrawn for
+       good, on screens with room to spare. */
+    touchLayer.classList.remove('no-stack');
+
     /* How tall may the utility stack be before it climbs into the radar?
      *
      * Six buttons is roughly 290px, which is taller than a phone held
@@ -643,7 +658,34 @@
      * layout still resolves itself. */
     var stack = touchLayer.querySelector('.tstack');
     var ttop = touchLayer.querySelector('.ttop');
-    if (stack) {
+    var leftPad = touchLayer.querySelector('.tpad-left');
+
+    /* Landscape on a phone has no height to give a ladder but plenty of empty
+       bottom edge between the thumbs, so the stock runs along it as circles
+       instead.  Tried first, because when it fits it is strictly better than
+       a ladder folded into stubby columns.
+       Not applied blind: a 320px-tall phone is also narrow enough that the row
+       reaches the d-pad, and there the ladder is still the better answer. */
+    if (stack && leftPad) {
+      touchLayer.classList.remove('row-bottom');
+      if (compact && w > h) {
+        stack.style.maxHeight = 'none';
+        touchLayer.classList.add('row-bottom');
+        var hitsPad = [].some.call(leftPad.querySelectorAll('.tbtn'), function (b) {
+          return overlaps(stack, b);
+        });
+        var r = stack.getBoundingClientRect();
+        if (hitsPad || r.left < 4) touchLayer.classList.remove('row-bottom');
+      }
+    }
+
+    if (stack && touchLayer.classList.contains('row-bottom')) {
+      /* The row frees the right-hand edge, but not all of it - MINE still
+         sits above BOMB and can still reach the MAP/GEAR/menu column. */
+      touchLayer.classList.remove('ttop-left');
+      stack.style.maxHeight = 'none';
+      if (ttop && rightSideClashes(ttop)) touchLayer.classList.add('ttop-left');
+    } else if (stack) {
       /* The radar is 22vmin capped at 190 against the top right, so that is
          the hard ceiling.  Everything below it is negotiable.
 
@@ -678,6 +720,33 @@
         stack.style.maxHeight =
           Math.round(Math.max(pitch, floor - radarCeiling - 10)) + 'px';
       }
+      /* Last word regardless of which branch ran: nothing on the right-hand
+         cluster may end up underneath that column. */
+      if (ttop && !touchLayer.classList.contains('ttop-left') && rightSideClashes(ttop)) {
+        touchLayer.classList.add('ttop-left');
+      }
+    }
+
+    /* Last resort.  A 568x320 phone has the radar down to 102px and the pads
+       starting at 119px, and five utility buttons do not fit in the 17px
+       between them - nor along the bottom, where the row would reach into the
+       d-pad.  Rather than ship a layout with controls stacked on top of each
+       other, the shortcut is withdrawn at that size: everything on it is still
+       in GEAR, which is where it lived before there was a stack at all.
+
+       Checked against everything else on screen, so this also catches whatever
+       the next awkward viewport turns out to be. */
+    if (stack) {
+      var others = [];
+      [].forEach.call(touchLayer.querySelectorAll('.tbtn'), function (b) {
+        if (!b.closest('.tstack') && !b.closest('.tgear-panel')) others.push(b);
+      });
+      var placed = [].every.call(stack.querySelectorAll('.tbtn'), function (s) {
+        var r = s.getBoundingClientRect();
+        if (r.left < 2 || r.top < 2 || r.right > w - 2 || r.bottom > h - 2) return false;
+        return !others.some(function (o) { return overlaps(s, o); });
+      });
+      if (!placed) touchLayer.classList.add('no-stack');
     }
 
     /* PORT sits outboard of BOOST, which on a narrow portrait phone walks it
@@ -686,7 +755,6 @@
        above BOOST instead of beside it: still a circle, still the same thumb,
        still adjacent to the control it belongs with. */
     var port = touchLayer.querySelector('.tpad-right .portal');
-    var leftPad = touchLayer.querySelector('.tpad-left');
     if (port && leftPad) {
       touchLayer.classList.remove('port-up');
       var clash = [].some.call(leftPad.querySelectorAll('.tbtn'), function (b) {
@@ -695,18 +763,71 @@
       if (clash) touchLayer.classList.add('port-up');
     }
 
-    /* tell the renderer how much of the bottom of the screen is thumbs */
+    /* Tell the renderer how much of the bottom of the screen is thumbs.
+     *
+     * `gutter` is how far the controls reach in from the edge, and the energy
+     * bar uses it to decide whether it can still sit in the bottom centre.
+     * It used to be read off the left pad alone, which was true while the
+     * right-hand cluster was the same size - but the bottom row reaches most
+     * of the way across, and a bar that trusted the old number would be drawn
+     * straight through it.  The bar is centred, so what it needs is the worst
+     * of the two sides: measure both and report the larger. */
     if (SS.render && SS.render.setInsets) {
-      var pad = touchLayer.querySelector('.tpad-left');
-      var rect = pad ? pad.getBoundingClientRect() : null;
+      var rect = leftPad ? leftPad.getBoundingClientRect() : null;
+      var reach = rect ? rect.width : 0;
+      var rightBtns = touchLayer.querySelectorAll('.tpad-right .tbtn, .tstack .tbtn');
+      for (var i = 0; i < rightBtns.length; i++) {
+        var rb = rightBtns[i].getBoundingClientRect();
+        if (rb.width) reach = Math.max(reach, w - rb.left);
+      }
+
+      /* `bottom` is how far up the bar has to climb to clear the controls, so
+       * the only controls that count are the ones it would actually hit.  The
+       * bar is centred and never wider than half the screen, so measure the
+       * middle band and ignore the corners: the d-pad is 150px tall but sits
+       * in the left corner, and letting it set this number lifted the bar into
+       * the vertical middle of a landscape phone - straight across the player's
+       * own ship - to avoid something it was never going to touch. */
+      /* This number only matters when the bar has been pushed up off the
+         bottom edge, and there it is drawn centred at a known width - so
+         measure against that span rather than a guess at "the middle". */
+      var barW = Math.min(460, w * 0.6);
+      var barL = (w - barW) / 2, barR = barL + barW;
+      var top = h;
+      /* Thumb clusters only.  MAP/GEAR/menu is anchored to the *top* of the
+         screen, and once it moves to the left edge it crosses this span -
+         counting it pushed the bar clean off the bottom and pinned it under
+         the status readout instead. */
+      var every = touchLayer.querySelectorAll('.tpad .tbtn, .tstack .tbtn');
+      for (var k = 0; k < every.length; k++) {
+        var eb = every[k].getBoundingClientRect();
+        if (!eb.width) continue;
+        /* A control the bar merely grazes does not get to push it: in
+           portrait the bar's right end laps the utility column by about
+           15px, and treating that as a blocker lifted the bar 240px, out of
+           the corner it belongs in and onto the player's own ship. */
+        var shared = Math.min(barR, eb.right) - Math.max(barL, eb.left);
+        if (shared > 24) top = Math.min(top, eb.top);
+      }
       SS.render.setInsets({
         controls: true,
         top: 0,
-        bottom: rect ? Math.round(rect.height + 18) : 0,
-        gutter: rect ? Math.round(rect.width + 20) : 0
+        bottom: top < h ? Math.round(h - top + 8) : 0,
+        gutter: Math.round(reach + 20)
       });
     }
   };
+
+  function relayout() {
+    hud.layoutTouch();
+    window.requestAnimationFrame(function () { hud.layoutTouch(); });
+  }
+
+  /* Does anything in the right-hand cluster sit under `el`? */
+  function rightSideClashes(el) {
+    var btns = touchLayer.querySelectorAll('.tpad-right .tbtn, .tstack .tbtn');
+    return [].some.call(btns, function (b) { return overlaps(el, b); });
+  }
 
   /* Do two laid-out controls share any screen?  Zero-sized elements (the
      layer is hidden, a menu owns the screen) never count. */
