@@ -171,7 +171,6 @@
     opts = opts || {};
     overlay.classList.remove('hidden');
     overlayOpen = true;
-    if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
 
     var node = buildMenu(title, rows, opts);
@@ -208,7 +207,6 @@
   hud.showText = function (lines, title, footer) {
     overlay.classList.remove('hidden');
     overlayOpen = true;
-    if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
     var rows = lines.map(function (l) {
       return typeof l === 'string' ? { text: l } : l;
@@ -247,7 +245,6 @@
     maxLen = maxLen || 40;
     overlay.classList.remove('hidden');
     overlayOpen = true;
-    if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
     var buf = '';
 
@@ -279,236 +276,37 @@
   };
 
   /* ------------------------------------------------------------------ */
-  /* on-screen controls                                                 */
+  /* touch controls                                                     */
   /* ------------------------------------------------------------------ */
 
-  /* A real-time ship needs three things held at once - turning, thrusting and
-     firing - so the controls are two thumb zones rather than a row of
-     buttons, and they are driven by pointer events with per-pointer tracking.
-     A single pressed/released listener per button cannot express "this thumb
-     slid from turn-left onto thrust", which is most of how anyone actually
-     flies with a d-pad.
-
-     Held controls carry `data-hold` and map to a virtual key.  Everything
-     else carries `data-act` and names a game action directly. */
-
-  var touchLayer = null;
-  var gearPanel = null;
-  var holdCounts = {};        // hold name -> how many pointers are on it
-  var pointerHold = {};       // pointerId -> hold name currently under it
-
-  /* left thumb: turn and thrust.  right thumb: fire, bomb, afterburner. */
-  var PADS = [
-    { cls: 'tpad-left', buttons: [
-      { hold: 'ArrowUp', label: '▲', cls: 'up', hint: 'thrust' },
-      { hold: 'ArrowLeft', label: '◀', cls: 'left', hint: 'turn' },
-      { hold: 'ArrowRight', label: '▶', cls: 'right', hint: 'turn' },
-      { hold: 'ArrowDown', label: '▼', cls: 'down', hint: 'reverse' }
-    ] },
-    { cls: 'tpad-right', buttons: [
-      { hold: 'Control', label: 'FIRE', cls: 'fire' },
-      { act: 'bomb', label: 'BOMB', cls: 'bomb' },
-      { hold: 'Boost', label: 'BOOST', cls: 'boost' }
-    ] }
-  ];
-
-  /* The rest of the command set, behind a toggle so it is available without
-     eating the screen.  Order follows how often you reach for them. */
-  var GEAR = [
-    { act: 'burst', label: 'Burst' },
-    { act: 'repel', label: 'Repel' },
-    { act: 'decoy', label: 'Decoy' },
-    { act: 'thor', label: 'Thor' },
-    { act: 'brick', label: 'Brick' },
-    { act: 'rocket', label: 'Rocket' },
-    { act: 'mine', label: 'Mine' },
-    { act: 'portal', label: 'Portal' },
-    { act: 'warp', label: 'Warp' },
-    { act: 'multifire', label: 'Multi' },
-    { act: 'stealth', label: 'Stealth' },
-    { act: 'cloak', label: 'Cloak' },
-    { act: 'xradar', label: 'X-Radar' },
-    { act: 'antiwarp', label: 'AntiWarp' },
-    { act: 'shipinfo', label: 'Ship' },
-    { act: 'discoveries', label: 'Greens' }
-  ];
-
-  hud.isTouchDevice = function () {
-    if (/[?&]touch=1/.test(location.search)) return true;    // forced, for testing
-    if (/[?&]touch=0/.test(location.search)) return false;
-    return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  };
-
+  /* Enough of a control set to fly with on a tablet.  Flight needs held
+     buttons rather than taps, so these set and clear the same virtual key
+     state that input.js reads. */
   hud.setupTouch = function () {
-    touchLayer = document.getElementById('touch');
-    if (!touchLayer) return;
-    /* Offered on any device that reports touch, including touch laptops -
-       there is no cost to a control layer nobody presses.  ?touch=1 forces it
-       on anywhere, which is how it gets tested from a desktop. */
-    if (!hud.isTouchDevice()) return;
+    var isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (!isTouch) return;
+    var bar = document.getElementById('touchbar');
+    if (!bar) return;
+    bar.classList.remove('hidden');
 
-    build();
-    touchLayer.classList.remove('hidden');
-    document.body.classList.add('touch');
-
-    /* Portrait works, but this is a game about seeing what is coming. */
-    if (window.innerHeight > window.innerWidth) {
-      SS.msg('Turn your device sideways for a much wider view.', '#9fd6ff');
-    }
-
-    document.addEventListener('pointerdown', onPointerDown, { passive: false });
-    document.addEventListener('pointermove', onPointerMove, { passive: false });
-    document.addEventListener('pointerup', onPointerUp, { passive: false });
-    document.addEventListener('pointercancel', onPointerUp, { passive: false });
-    /* a long press on a control should not offer to select or search it */
-    touchLayer.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-    hud.layoutTouch();
-    window.addEventListener('resize', hud.layoutTouch);
-    window.addEventListener('orientationchange', hud.layoutTouch);
-  };
-
-  function build() {
-    var html = '';
-    PADS.forEach(function (pad) {
-      html += '<div class="tpad ' + pad.cls + '">';
-      pad.buttons.forEach(function (b) {
-        html += '<button class="tbtn ' + (b.cls || '') + '"' +
-          (b.hold ? ' data-hold="' + b.hold + '"' : '') +
-          (b.act ? ' data-act="' + b.act + '"' : '') +
-          '>' + b.label + '</button>';
-      });
-      html += '</div>';
+    var keys = [
+      ['↶', 'ArrowLeft'], ['▲', 'ArrowUp'], ['↷', 'ArrowRight'],
+      ['▼', 'ArrowDown'], ['GUN', 'Control'], ['BOMB', 'Tab'],
+      ['AB', 'Shift'], ['MAP', 'Alt'], ['☰', 'Escape']
+    ];
+    keys.forEach(function (k) {
+      var b = document.createElement('button');
+      b.textContent = k[0];
+      function down(e) { e.preventDefault(); SS.input.setVirtual(k[1], true); }
+      function up(e) { e.preventDefault(); SS.input.setVirtual(k[1], false); }
+      b.addEventListener('touchstart', down, { passive: false });
+      b.addEventListener('touchend', up, { passive: false });
+      b.addEventListener('touchcancel', up, { passive: false });
+      b.addEventListener('mousedown', down);
+      b.addEventListener('mouseup', up);
+      b.addEventListener('mouseleave', up);
+      bar.appendChild(b);
     });
-
-    html += '<div class="ttop">' +
-      '<button class="tbtn small" data-hold="Alt">MAP</button>' +
-      '<button class="tbtn small" id="tgear">GEAR</button>' +
-      '<button class="tbtn small" data-act="menu">☰</button>' +
-      '</div>';
-
-    html += '<div class="tgear-panel hidden" id="tgearpanel">';
-    GEAR.forEach(function (g) {
-      html += '<button class="tbtn gear" data-act="' + g.act + '">' +
-        escapeHtml(g.label) + '</button>';
-    });
-    html += '</div>';
-
-    touchLayer.innerHTML = html;
-    gearPanel = document.getElementById('tgearpanel');
-
-    document.getElementById('tgear').addEventListener('click', function (e) {
-      e.preventDefault();
-      gearPanel.classList.toggle('hidden');
-    });
-  }
-
-  /* Portrait on a phone leaves very little room between the two thumb zones,
-     so the controls shrink rather than overlap. */
-  hud.layoutTouch = function () {
-    if (!touchLayer || touchLayer.classList.contains('hidden')) return;
-    var w = window.innerWidth, h = window.innerHeight;
-    var compact = Math.min(w, h) < 420 || h < 480;
-    touchLayer.classList.toggle('compact', compact);
-    /* tell the renderer how much of the bottom of the screen is thumbs */
-    if (SS.render && SS.render.setInsets) {
-      var pad = touchLayer.querySelector('.tpad-left');
-      var rect = pad ? pad.getBoundingClientRect() : null;
-      SS.render.setInsets({
-        controls: true,
-        top: 0,
-        bottom: rect ? Math.round(rect.height + 18) : 0,
-        gutter: rect ? Math.round(rect.width + 20) : 0
-      });
-    }
-  };
-
-  /* ---- pointer plumbing ------------------------------------------------ */
-
-  function controlAt(x, y) {
-    var el = document.elementFromPoint(x, y);
-    if (!el || !el.closest) return null;
-    return el.closest('.tbtn');
-  }
-
-  function press(name) {
-    holdCounts[name] = (holdCounts[name] || 0) + 1;
-    if (holdCounts[name] === 1) SS.input.setVirtual(name, true);
-  }
-
-  function release(name) {
-    if (!holdCounts[name]) return;
-    holdCounts[name]--;
-    if (holdCounts[name] <= 0) {
-      delete holdCounts[name];
-      SS.input.setVirtual(name, false);
-    }
-  }
-
-  /* The pointer stays tracked even when it is over nothing, so a thumb that
-     wanders off the pad mid-turn can wander back on again.  Forgetting it the
-     moment it left meant the finger was dead until you lifted it. */
-  function setPointerHold(id, name) {
-    var current = pointerHold[id] || null;
-    if (current === name && (id in pointerHold)) return;
-    if (current) release(current);
-    pointerHold[id] = name;          // may be null: tracked, holding nothing
-    if (name) press(name);
-  }
-
-  function forgetPointer(id) {
-    if (!(id in pointerHold)) return;
-    setPointerHold(id, null);
-    delete pointerHold[id];
-  }
-
-  function onPointerDown(e) {
-    if (hud.isOpen()) return;
-    var btn = controlAt(e.clientX, e.clientY);
-    if (!btn) return;
-    e.preventDefault();
-    btn.classList.add('lit');
-    if (btn.dataset.act) {
-      SS.input.pushAction(btn.dataset.act);
-      window.setTimeout(function () { btn.classList.remove('lit'); }, 110);
-      return;
-    }
-    if (btn.dataset.hold) setPointerHold(e.pointerId, btn.dataset.hold);
-  }
-
-  function onPointerMove(e) {
-    /* only tracks pointers that started on a held control, so dragging on the
-       map does not start steering the ship */
-    if (!(e.pointerId in pointerHold)) return;
-    e.preventDefault();
-    var btn = controlAt(e.clientX, e.clientY);
-    var name = btn && btn.dataset.hold ? btn.dataset.hold : null;
-    setPointerHold(e.pointerId, name);
-    paintLit();
-  }
-
-  function onPointerUp(e) {
-    if (e.pointerId in pointerHold) {
-      e.preventDefault();
-      forgetPointer(e.pointerId);
-    }
-    paintLit();
-  }
-
-  function paintLit() {
-    if (!touchLayer) return;
-    var btns = touchLayer.querySelectorAll('[data-hold]');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('lit', !!holdCounts[btns[i].dataset.hold]);
-    }
-  }
-
-  /* Releasing everything matters more here than on a keyboard: a thumb lifted
-     during a menu never produces a pointerup on the button. */
-  hud.releaseTouch = function () {
-    Object.keys(pointerHold).forEach(forgetPointer);
-    holdCounts = {};
-    paintLit();
   };
 
 })(typeof window !== 'undefined' ? (window.SS = window.SS || {}) : (global.SS = global.SS || {}));

@@ -137,7 +137,7 @@ js/enemyai.js       populating a sector, and flying the ships in it
 js/radar.js         radar, map memory, and who can see whom
 js/sprites.js       artwork, generated at startup
 js/render.js        camera, starfield, world, radar, gauges
-js/hud.js           messages, menus, prompts, on-screen controls
+js/hud.js           messages, menus, prompts, touch controls
 js/input.js         the keyboard
 js/commands.js      the screens you can open mid-flight
 js/save.js          serialisation
@@ -147,33 +147,6 @@ test/headless.js    test harness
 serve.js            static dev server
 build.js            single-file bundler
 ```
-
-## Touch
-
-On anything reporting a touch screen, an on-screen control layer appears: a d-pad
-under the left thumb, FIRE / BOMB / BOOST under the right, and a GEAR panel holding
-the rest of the command set. `?touch=1` forces it on anywhere, which is how it gets
-tested from a desktop; `?touch=0` forces it off.
-
-Three things about it are less obvious than they look:
-
-- **Pointer events with per-pointer tracking, not a listener per button.** A single
-  press/release handler per button cannot express "this thumb slid from turn-left
-  onto thrust", which is most of how anyone flies with a d-pad. A pointer stays
-  tracked even while it is over nothing, so a thumb that wanders off the pad can
-  wander back on.
-- **Buttons name actions, they do not synthesise keys.** Half the command set is a
-  modifier plus a key; a touch button that had to fake "Shift down, Tab down, Shift
-  up" would be recreating a keyboard in order to talk to a keyboard parser.
-- **BOOST is not Shift.** On a keyboard Shift+Ctrl is a repel, so holding Shift
-  suppresses gunfire. On screen they are separate buttons under separate thumbs and
-  holding both means both, so the on-screen boost carries its own name.
-
-The renderer scales with the viewport: tile size drops on small screens so a phone
-sees 34 tiles across its short axis rather than 23, and everything drawn in pixels
-rather than tiles scales with it. The gauges and status readout keep out from under
-the thumb pads — which sit in the *corners*, so in landscape the energy bar stays at
-the bottom between them, and only in portrait does it climb above.
 
 ## Saving
 

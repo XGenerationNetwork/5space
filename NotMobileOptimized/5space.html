@@ -2,10 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>5Space &mdash; a SubSpace roguelike</title>
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305060a'/%3E%3Cpath d='M16 4 L26 27 L16 21 L6 27 Z' fill='%2340c0f0'/%3E%3C/svg%3E">
@@ -33,15 +30,6 @@ html, body {
   color: var(--ink);
   font-family: var(--mono);
   -webkit-font-smoothing: antialiased;
-
-  /* A game surface, not a document: no pinch-zoom, no pull-to-refresh, no
-     text selection or callout menus when a thumb rests on a control. */
-  touch-action: none;
-  overscroll-behavior: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent;
 }
 
 #screen {
@@ -184,161 +172,37 @@ html, body {
 .shipblurb { color: var(--ink); font-size: 12.5px; padding: 2px 0 0 2.4ch; opacity: 0.9; }
 .shiphint { color: var(--dim); font-size: 12px; padding: 0 0 4px 2.4ch; font-style: italic; }
 
-/* ---- on-screen controls ---------------------------------------------- */
+/* ---- touch controls -------------------------------------------------- */
 
-/* The layer covers the screen but only its buttons take input, so a thumb
-   that misses one lands on the game rather than on an invisible panel. */
-#touch {
+#touchbar {
   position: fixed;
-  inset: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 3px;
+  padding: 4px;
   z-index: 15;
-  pointer-events: none;
 }
 
-/* A menu owns the whole screen; the flight controls step aside for it. */
-#overlay:not(.hidden) ~ #touch { display: none; }
-
-#touch .tbtn {
-  pointer-events: auto;
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(16, 26, 40, 0.5);
-  border: 1px solid rgba(120, 175, 225, 0.34);
-  border-radius: 12px;
+#touchbar button {
+  background: rgba(20, 32, 48, 0.85);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
   color: var(--ink);
   font-family: var(--mono);
   font-size: 13px;
-  font-weight: bold;
-  letter-spacing: 0.04em;
+  padding: 12px 0;
   touch-action: none;
-  backdrop-filter: blur(2px);
-  transition: background 0.06s linear, transform 0.06s linear;
+  user-select: none;
 }
 
-#touch .tbtn.lit,
-#touch .tbtn:active {
-  background: rgba(64, 192, 240, 0.42);
-  border-color: rgba(150, 220, 255, 0.8);
-  transform: scale(0.96);
-}
-
-/* thumb zones: bottom corners, inside the safe area */
-#touch .tpad {
-  position: absolute;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-  width: 186px;
-  height: 186px;
-  pointer-events: none;
-}
-#touch .tpad-left { left: calc(env(safe-area-inset-left, 0px) + 10px); }
-#touch .tpad-right { right: calc(env(safe-area-inset-right, 0px) + 10px); }
-
-/* a d-pad: thrust above, reverse below, turn either side */
-#touch .tpad-left .tbtn { width: 62px; height: 62px; font-size: 20px; }
-#touch .tpad-left .up { left: 62px; top: 0; }
-#touch .tpad-left .left { left: 0; top: 62px; }
-#touch .tpad-left .right { left: 124px; top: 62px; }
-#touch .tpad-left .down { left: 62px; top: 124px; }
-
-/* fire under the thumb, bomb and boost within reach of it */
-#touch .tpad-right .fire {
-  right: 0; bottom: 8px;
-  width: 104px; height: 104px;
-  border-radius: 52px;
-  font-size: 17px;
-  background: rgba(64, 150, 200, 0.34);
-}
-#touch .tpad-right .bomb { right: 8px; bottom: 118px; width: 86px; height: 52px; }
-#touch .tpad-right .boost { right: 112px; bottom: 20px; width: 68px; height: 68px; border-radius: 34px; }
-
-/* Map, gear and menu stack down the right-hand edge, below the radar.
-   Anywhere along the top centre they eventually collide with the status
-   readout on the left - which is exactly what happened on a tablet, where
-   the readout is wide enough to reach the middle.  The radar is 22vmin tall
-   (capped at 190px) and starts 12px down, hence the offset. */
-#touch .ttop {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + min(22vmin, 190px) + 22px);
-  right: calc(env(safe-area-inset-right, 0px) + 10px);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  pointer-events: none;
-}
-#touch .ttop .tbtn {
-  position: static;
-  min-width: 56px;
-  height: 34px;
-  font-size: 12px;
-  border-radius: 8px;
-}
-
-/* everything else, behind one toggle, opening inward from that column */
-#touch .tgear-panel {
-  position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + min(22vmin, 190px) + 22px);
-  right: calc(env(safe-area-inset-right, 0px) + 72px);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  padding: 10px;
-  width: min(420px, calc(100vw - 96px));
-  background: rgba(8, 12, 20, 0.9);
-  border: 1px solid var(--edge);
-  border-radius: 10px;
-  pointer-events: auto;
-}
-#touch .tgear-panel .tbtn {
-  position: static;
-  height: 40px;
-  font-size: 11px;
-  font-weight: normal;
-  border-radius: 7px;
-}
-
-/* compact: small phones, where the pads would otherwise meet in the middle */
-#touch.compact .tpad { width: 150px; height: 150px; }
-#touch.compact .tpad-left .tbtn { width: 50px; height: 50px; font-size: 17px; }
-#touch.compact .tpad-left .up { left: 50px; top: 0; }
-#touch.compact .tpad-left .left { left: 0; top: 50px; }
-#touch.compact .tpad-left .right { left: 100px; top: 50px; }
-#touch.compact .tpad-left .down { left: 50px; top: 100px; }
-#touch.compact .tpad-right .fire { width: 86px; height: 86px; border-radius: 43px; font-size: 14px; }
-#touch.compact .tpad-right .bomb { bottom: 100px; width: 74px; height: 44px; font-size: 11px; }
-#touch.compact .tpad-right .boost { right: 92px; bottom: 16px; width: 58px; height: 58px; border-radius: 29px; font-size: 11px; }
-
-#touch.compact .ttop .tbtn { min-width: 52px; height: 30px; font-size: 11px; }
-#touch.compact .tgear-panel {
-  grid-template-columns: repeat(3, 1fr);
-  width: min(300px, calc(100vw - 96px));
-}
-
-/* the message log clears the compact status readout when controls are up */
-body.touch #messages {
-  top: calc(env(safe-area-inset-top, 0px) + 52px);
-  left: calc(env(safe-area-inset-left, 0px) + 12px);
-  max-width: 54vw;
-  font-size: 11px;
-}
-
-body.touch #banner { top: 26%; }
-
-/* menus must clear the thumb zones and the notch */
-body.touch #overlay {
-  padding: calc(env(safe-area-inset-top, 0px) + 12px)
-           calc(env(safe-area-inset-right, 0px) + 12px)
-           calc(env(safe-area-inset-bottom, 0px) + 12px)
-           calc(env(safe-area-inset-left, 0px) + 12px);
-}
-body.touch .menu { max-height: 86vh; }
-body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
+#touchbar button:active { background: rgba(64, 192, 240, 0.3); }
 
 @media (max-width: 700px) {
   #messages { font-size: 11px; max-width: 70vw; }
   .menu { font-size: 12px; padding: 12px 14px; }
-  .mrow.pick { padding: 8px 6px; }
 }
 
 </style>
@@ -348,7 +212,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 <div id="messages"></div>
 <div id="banner" class="hidden"></div>
 <div id="overlay" class="hidden"></div>
-<div id="touch" class="hidden"></div>
+<div id="touchbar" class="hidden"></div>
 
 <script>
 /* ===== js/rng.js ===== */
@@ -4846,34 +4710,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
   var canvas, ctx;
   var W = 0, H = 0, dpr = 1;
-
-  /* Screen pixels per tile.  Sixteen is Continuum's, and it is what a desktop
-     gets; a phone would see twenty-three tiles across at that scale, which is
-     not enough of the world to fly in.  So the zoom drops on small viewports
-     and `scale` carries the difference through to everything drawn in pixels
-     rather than tiles - ships, shots, pickups, text. */
-  var BASE_TILE = 16;
-  var MIN_TILES_SHORT_SIDE = 34;    // how much world the short axis must show
-  var TILE = BASE_TILE;
-  var scale = 1;
+  var TILE = 16;                 // screen pixels per tile
   var camX = 0, camY = 0;
-
-  /* Where the on-screen controls are, so the HUD can keep out from under a
-     thumb.  The pads sit in the bottom *corners*, so `gutter` (how far in
-     they reach from each side) matters more than `bottom` (how tall they
-     are): in landscape there is plenty of room between them at the very
-     bottom of the screen, and only in portrait do they meet in the middle
-     and force the gauges upward. */
-  var insets = { top: 0, bottom: 0, gutter: 0, controls: false };
-
-  render.setInsets = function (next) {
-    insets.top = next.top || 0;
-    insets.bottom = next.bottom || 0;
-    insets.gutter = next.gutter || 0;
-    insets.controls = !!next.controls;
-  };
-
-  render.tileSize = function () { return TILE; };
 
   var stars = [];
   var effects = [];
@@ -4905,17 +4743,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
-
-    TILE = SS.clamp(Math.floor(Math.min(W, H) / MIN_TILES_SHORT_SIDE), 10, BASE_TILE);
-    scale = TILE / BASE_TILE;
   };
-
-  /* Font sizes are in desktop pixels and get scaled with everything else, but
-     never below the point where they stop being readable. */
-  function font(size, bold) {
-    return (bold ? 'bold ' : '') + Math.max(10, Math.round(size * scale)) +
-      'px "DejaVu Sans Mono", "Courier New", monospace';
-  }
 
   render.viewport = function () { return { w: W, h: H }; };
 
@@ -5047,9 +4875,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       var px = sx(g.x), py = sy(g.y);
       if (px < -20 || py < -20 || px > W + 20 || py > H + 20) continue;
       /* the squash makes it read as a rotating gem without a second sprite */
-      var w = (16 * Math.abs(Math.cos(spin * Math.PI * 2)) + 4) * scale;
-      var h = 20 * scale;
-      ctx.drawImage(img, px - w / 2, py - h / 2, w, h);
+      var w = 16 * Math.abs(Math.cos(spin * Math.PI * 2)) + 4;
+      ctx.drawImage(img, px - w / 2, py - 10, w, 20);
     }
   }
 
@@ -5063,7 +4890,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       ctx.save();
       ctx.translate(px, py);
       ctx.rotate(wr.orient * Math.PI * 2);
-      ctx.scale(scale, scale);
       ctx.drawImage(img, -14, -14);
       ctx.restore();
     }
@@ -5075,8 +4901,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     if (sec.depth !== SS.MAXDEPTH) return;
     var img = SS.sprites.flag();
     var bob = Math.sin(Date.now() / 400) * 3;
-    ctx.drawImage(img, sx(sec.flagStand.x) - 12 * scale, sy(sec.flagStand.y) - 12 * scale + bob,
-      24 * scale, 24 * scale);
+    ctx.drawImage(img, sx(sec.flagStand.x) - 12, sy(sec.flagStand.y) - 12 + bob);
   }
 
   function drawDecoys(sec) {
@@ -5105,7 +4930,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       var px = sx(w.x), py = sy(w.y);
       if (px < -30 || py < -30 || px > W + 30 || py > H + 30) continue;
       var st = SHOT_STYLE[w.type] || SHOT_STYLE.bullet;
-      var r = st.r * scale * (w.type === 'bomb' || w.type === 'mine' ? (0.7 + w.level * 0.3) : 1);
+      var r = st.r * (w.type === 'bomb' || w.type === 'mine' ? (0.7 + w.level * 0.3) : 1);
 
       /* bullets get a short streak along their heading */
       if (w.type === 'bullet' || w.type === 'shrap' || w.type === 'burst') {
@@ -5160,8 +4985,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       ctx.globalAlpha = 1;
       drawShipDecoration(player, sx(player.x), sy(player.y), true);
       if (player.hasFlag) {
-        ctx.drawImage(SS.sprites.flag(), sx(player.x) - 4 * scale, sy(player.y) - 26 * scale,
-          24 * scale, 24 * scale);
+        ctx.drawImage(SS.sprites.flag(), sx(player.x) - 4, sy(player.y) - 26);
       }
     }
   }
@@ -5170,17 +4994,16 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     var sheet = SS.sprites.shipSheet(key, color);
     var rot = SS.orientToRotation(orient);
     var px = SS.sprites.SHIP_PX;
-    var d = Math.round(px * scale);
     ctx.drawImage(sheet, rot * px, 0, px, px,
-      Math.round(sx(wx) - d / 2), Math.round(sy(wy) - d / 2), d, d);
+      Math.round(sx(wx) - px / 2), Math.round(sy(wy) - px / 2), px, px);
   }
 
   function drawThrustFlame(sh) {
     if (!sh.thrusting) return;
     var head = SS.orientToHeading(sh.orient);
-    var bx = sx(sh.x) - head.x * 18 * scale, by = sy(sh.y) - head.y * 18 * scale;
+    var bx = sx(sh.x) - head.x * 18, by = sy(sh.y) - head.y * 18;
     var flicker = 0.6 + Math.random() * 0.4;
-    var len = (sh.timer.rocket > 0 ? 26 : 14) * flicker * scale;
+    var len = (sh.timer.rocket > 0 ? 26 : 14) * flicker;
     var grad = ctx.createRadialGradient(bx, by, 0, bx, by, len);
     grad.addColorStop(0, sh.timer.rocket > 0 ? '#ffffff' : '#ffe9a0');
     grad.addColorStop(0.4, sh.afterburning ? '#66ccff' : '#ff9a3c');
@@ -5200,25 +5023,25 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         : 'rgba(120,200,255,' + (0.4 + t * 0.3) + ')';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(px, py, 24 * scale, 0, Math.PI * 2);
+      ctx.arc(px, py, 24, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (sh.timer.shutdown > 0) {
       ctx.strokeStyle = 'rgba(255,80,80,0.7)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(px, py, (26 + Math.sin(Date.now() / 90) * 3) * scale, 0, Math.PI * 2);
+      ctx.arc(px, py, 26 + Math.sin(Date.now() / 90) * 3, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (!isPlayer) {
       /* the bounty tag, in SubSpace's own idiom */
-      ctx.font = font(11);
+      ctx.font = '11px "DejaVu Sans Mono", "Courier New", monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = sh.isBoss ? '#ffffff' : 'rgba(255,220,140,0.85)';
-      ctx.fillText(String(Math.round(sh.bounty)), px, py + 30 * scale);
+      ctx.fillText(String(Math.round(sh.bounty)), px, py + 30);
       if (sh.isBoss) {
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillText(sh.name, px, py - 26 * scale);
+        ctx.fillText(sh.name, px, py - 26);
       }
     }
   }
@@ -5288,13 +5111,13 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         ctx.strokeStyle = SS.sprites.rgba(e.color, 1 - t);
         ctx.lineWidth = 3 * (1 - t) + 1;
         ctx.beginPath();
-        ctx.arc(px, py, (8 + t * 40) * scale, 0, Math.PI * 2);
+        ctx.arc(px, py, 8 + t * 40, 0, Math.PI * 2);
         ctx.stroke();
       } else if (e.kind === 'float') {
-        ctx.font = font(13, true);
+        ctx.font = 'bold 13px "DejaVu Sans Mono", "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = SS.sprites.rgba(e.color, 1 - t);
-        ctx.fillText(e.text, px, py - (30 + t * 26) * scale);
+        ctx.fillText(e.text, px, py - 30 - t * 26);
       }
     }
   }
@@ -5306,17 +5129,17 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   var RADAR_PX = 190;
 
   function drawRadar(sec, player) {
-    var size = Math.min(RADAR_PX, Math.floor(Math.min(W, H) * (insets.controls ? 0.22 : 0.28)));
+    var size = Math.min(RADAR_PX, Math.floor(Math.min(W, H) * 0.28));
     var x0 = W - size - 12, y0 = 12;
     var span = 110;                       // tiles across the pane
-    var pxPerTile = size / span;   // radar pixels per world tile
+    var scale = size / span;
 
     panel(x0, y0, size, size);
 
     var ox = player.x - span / 2, oy = player.y - span / 2;
 
     /* explored terrain, sampled rather than drawn tile by tile */
-    var stepT = Math.max(1, Math.round(1 / pxPerTile));
+    var stepT = Math.max(1, Math.round(1 / scale));
     for (var ty = 0; ty < span; ty += stepT) {
       for (var tx = 0; tx < span; tx += stepT) {
         var wx = Math.floor(ox + tx), wy = Math.floor(oy + ty);
@@ -5327,15 +5150,15 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         var c = SS.TILES[t].color;
         if (!c) continue;
         ctx.fillStyle = c;
-        ctx.fillRect(x0 + tx * pxPerTile, y0 + ty * pxPerTile,
-          Math.max(1, stepT * pxPerTile), Math.max(1, stepT * pxPerTile));
+        ctx.fillRect(x0 + tx * scale, y0 + ty * scale,
+          Math.max(1, stepT * scale), Math.max(1, stepT * scale));
       }
     }
 
     var blips = SS.radar.blips(sec, player);
     for (var i = 0; i < blips.length; i++) {
       var b = blips[i];
-      var bx = x0 + (b.x - ox) * pxPerTile, by = y0 + (b.y - oy) * pxPerTile;
+      var bx = x0 + (b.x - ox) * scale, by = y0 + (b.y - oy) * scale;
       if (bx < x0 || by < y0 || bx > x0 + size || by > y0 + size) continue;
       ctx.fillStyle = b.color;
       if (b.ring) {
@@ -5362,12 +5185,12 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   function drawFullMap(sec, player) {
     var size = Math.min(W, H) - 80;
     var x0 = (W - size) / 2, y0 = (H - size) / 2;
-    var mapScale = size / sec.size;
+    var scale = size / sec.size;
 
     ctx.fillStyle = 'rgba(4,6,12,0.92)';
     ctx.fillRect(x0 - 8, y0 - 8, size + 16, size + 16);
 
-    var step = Math.max(1, Math.round(1 / mapScale));
+    var step = Math.max(1, Math.round(1 / scale));
     for (var ty = 0; ty < sec.size; ty += step) {
       for (var tx = 0; tx < sec.size; tx += step) {
         if (!sec.explored[ty * sec.size + tx]) continue;
@@ -5376,8 +5199,8 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         var c = SS.TILES[t].color;
         if (!c) continue;
         ctx.fillStyle = c;
-        ctx.fillRect(x0 + tx * mapScale, y0 + ty * mapScale,
-          Math.max(1, step * mapScale), Math.max(1, step * mapScale));
+        ctx.fillRect(x0 + tx * scale, y0 + ty * scale,
+          Math.max(1, step * scale), Math.max(1, step * scale));
       }
     }
 
@@ -5385,15 +5208,15 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     for (var i = 0; i < blips.length; i++) {
       var b = blips[i];
       ctx.fillStyle = b.color;
-      ctx.fillRect(x0 + b.x * mapScale - 2, y0 + b.y * mapScale - 2, 4, 4);
+      ctx.fillRect(x0 + b.x * scale - 2, y0 + b.y * scale - 2, 4, 4);
     }
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x0 + player.x * mapScale - 2, y0 + player.y * mapScale - 2, 4, 4);
+    ctx.fillRect(x0 + player.x * scale - 2, y0 + player.y * scale - 2, 4, 4);
 
     ctx.strokeStyle = 'rgba(120,180,220,0.6)';
     ctx.strokeRect(x0 - 0.5, y0 - 0.5, size + 1, size + 1);
 
-    ctx.font = font(13);
+    ctx.font = '13px "DejaVu Sans Mono", "Courier New", monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(180,210,240,0.9)';
     ctx.fillText('Sector ' + sec.depth + '  -  release Alt to return',
@@ -5416,18 +5239,9 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     var max = SS.ship.energyMax(p);
     var frac = SS.clamp(p.energy / max, 0, 1);
 
-    /* The bar wants the bottom centre.  If the thumb pads leave a usable gap
-       between them - which they do in landscape - it stays there and just
-       narrows to fit.  Only when they close up, as they do in portrait, does
-       it climb above them. */
-    var gap = W - insets.gutter * 2;
-    var lifted = insets.controls && gap < 220;
-    var barH = insets.controls ? 14 : 18;
-    var barW = lifted
-      ? Math.min(460, W * 0.6)
-      : SS.clamp(gap - 24, 120, Math.min(460, W * 0.5));
-    var x0 = (W - barW) / 2;
-    var y0 = H - barH - 16 - (lifted ? insets.bottom : 0);
+    var barW = Math.min(460, W * 0.5);
+    var barH = 18;
+    var x0 = (W - barW) / 2, y0 = H - barH - 16;
 
     panel(x0 - 3, y0 - 3, barW + 6, barH + 6);
 
@@ -5442,11 +5256,10 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     ctx.lineWidth = 1;
     ctx.strokeRect(x0 + 0.5, y0 + 0.5, barW - 1, barH - 1);
 
-    ctx.font = font(12, true);
+    ctx.font = 'bold 12px "DejaVu Sans Mono", "Courier New", monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#eaf2ff';
-    ctx.fillText(Math.round(p.energy) + ' / ' + Math.round(max),
-      x0 + barW / 2, y0 + barH - 5);
+    ctx.fillText(Math.round(p.energy) + ' / ' + Math.round(max), x0 + barW / 2, y0 + 13);
 
     /* the safe-zone loiter clock, when it is running */
     if (game.sector.inSafeZone(p.x, p.y)) {
@@ -5456,17 +5269,13 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     }
   }
 
-  /* Hull, sector, bounty, points, and the stock of every limited-use item
-     this hull can carry.  Bottom-left on a desktop; when on-screen controls
-     are up there is no bottom-left to speak of, so it collapses to two lines
-     under the message log instead. */
+  /* Bottom-left readout: hull, sector, bounty, points, and the stock of every
+     limited-use item that this hull can actually carry. */
   function drawStatus(game) {
     var p = game.player;
+    var lines = [];
     var def = SS.ship.def(p);
 
-    if (insets.controls) { drawStatusCompact(game); return; }
-
-    var lines = [];
     lines.push({ text: def.name + '  -  Sector ' + game.sector.depth +
       (game.player.hasFlag ? '  [PRIME FLAG]' : ''), color: '#cfe4ff' });
     lines.push({ text: 'Guns ' + p.guns + '   Bombs ' + (p.bombs || '-') +
@@ -5494,7 +5303,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       '   Kills ' + p.kills + '   T ' + SS.clockString(game.elapsed),
       color: '#7f96b0' });
 
-    ctx.font = font(12);
+    ctx.font = '12px "DejaVu Sans Mono", "Courier New", monospace';
     ctx.textAlign = 'left';
     var lh = 16;
     var boxH = lines.length * lh + 10;
@@ -5503,42 +5312,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       ctx.fillStyle = lines[i].color;
       ctx.fillText(lines[i].text, 16, H - boxH - 8 + 18 + i * lh);
     }
-  }
-
-  /* The phone version: only what you have to glance at mid-fight, tucked
-     under the radar where no thumb reaches. */
-  function drawStatusCompact(game) {
-    var p = game.player;
-    var def = SS.ship.def(p);
-
-    var first = def.name + '  S' + game.sector.depth +
-      '  G' + p.guns + (p.bombs ? ' B' + p.bombs : '') +
-      '  ' + Math.round(p.bounty) + 'pts' +
-      (p.hasFlag ? '  [FLAG]' : '');
-
-    var stock = [];
-    SS.weapons.UTILITIES.forEach(function (u) {
-      var n = p.count[u.key];
-      if (!n) return;
-      stock.push(u.label.charAt(0) + n);
-    });
-    ['cloak', 'stealth', 'xradar', 'antiwarp'].forEach(function (k) {
-      if (p.on[k]) stock.push(k.slice(0, 4).toUpperCase());
-    });
-
-    ctx.font = font(11);
-    ctx.textAlign = 'left';
-    var lh = Math.round(14 * scale);
-    var y = insets.top + 8;
-    var lines = (stock.length && W >= 520) ? [first, stock.join(' ')] : [first];
-    var wide = 0;
-    lines.forEach(function (t) { wide = Math.max(wide, ctx.measureText(t).width); });
-
-    panel(8, y, wide + 16, lines.length * lh + 8);
-    lines.forEach(function (t, i) {
-      ctx.fillStyle = i ? '#8fa6c0' : '#cfe4ff';
-      ctx.fillText(t, 16, y + 14 + i * lh);
-    });
   }
 
 })(typeof window !== 'undefined' ? (window.SS = window.SS || {}) : (global.SS = global.SS || {}));
@@ -5717,7 +5490,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     opts = opts || {};
     overlay.classList.remove('hidden');
     overlayOpen = true;
-    if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
 
     var node = buildMenu(title, rows, opts);
@@ -5754,7 +5526,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   hud.showText = function (lines, title, footer) {
     overlay.classList.remove('hidden');
     overlayOpen = true;
-    if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
     var rows = lines.map(function (l) {
       return typeof l === 'string' ? { text: l } : l;
@@ -5793,7 +5564,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     maxLen = maxLen || 40;
     overlay.classList.remove('hidden');
     overlayOpen = true;
-    if (hud.releaseTouch) hud.releaseTouch();
     keyQueue.length = 0;
     var buf = '';
 
@@ -5825,236 +5595,37 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   };
 
   /* ------------------------------------------------------------------ */
-  /* on-screen controls                                                 */
+  /* touch controls                                                     */
   /* ------------------------------------------------------------------ */
 
-  /* A real-time ship needs three things held at once - turning, thrusting and
-     firing - so the controls are two thumb zones rather than a row of
-     buttons, and they are driven by pointer events with per-pointer tracking.
-     A single pressed/released listener per button cannot express "this thumb
-     slid from turn-left onto thrust", which is most of how anyone actually
-     flies with a d-pad.
-
-     Held controls carry `data-hold` and map to a virtual key.  Everything
-     else carries `data-act` and names a game action directly. */
-
-  var touchLayer = null;
-  var gearPanel = null;
-  var holdCounts = {};        // hold name -> how many pointers are on it
-  var pointerHold = {};       // pointerId -> hold name currently under it
-
-  /* left thumb: turn and thrust.  right thumb: fire, bomb, afterburner. */
-  var PADS = [
-    { cls: 'tpad-left', buttons: [
-      { hold: 'ArrowUp', label: '▲', cls: 'up', hint: 'thrust' },
-      { hold: 'ArrowLeft', label: '◀', cls: 'left', hint: 'turn' },
-      { hold: 'ArrowRight', label: '▶', cls: 'right', hint: 'turn' },
-      { hold: 'ArrowDown', label: '▼', cls: 'down', hint: 'reverse' }
-    ] },
-    { cls: 'tpad-right', buttons: [
-      { hold: 'Control', label: 'FIRE', cls: 'fire' },
-      { act: 'bomb', label: 'BOMB', cls: 'bomb' },
-      { hold: 'Boost', label: 'BOOST', cls: 'boost' }
-    ] }
-  ];
-
-  /* The rest of the command set, behind a toggle so it is available without
-     eating the screen.  Order follows how often you reach for them. */
-  var GEAR = [
-    { act: 'burst', label: 'Burst' },
-    { act: 'repel', label: 'Repel' },
-    { act: 'decoy', label: 'Decoy' },
-    { act: 'thor', label: 'Thor' },
-    { act: 'brick', label: 'Brick' },
-    { act: 'rocket', label: 'Rocket' },
-    { act: 'mine', label: 'Mine' },
-    { act: 'portal', label: 'Portal' },
-    { act: 'warp', label: 'Warp' },
-    { act: 'multifire', label: 'Multi' },
-    { act: 'stealth', label: 'Stealth' },
-    { act: 'cloak', label: 'Cloak' },
-    { act: 'xradar', label: 'X-Radar' },
-    { act: 'antiwarp', label: 'AntiWarp' },
-    { act: 'shipinfo', label: 'Ship' },
-    { act: 'discoveries', label: 'Greens' }
-  ];
-
-  hud.isTouchDevice = function () {
-    if (/[?&]touch=1/.test(location.search)) return true;    // forced, for testing
-    if (/[?&]touch=0/.test(location.search)) return false;
-    return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  };
-
+  /* Enough of a control set to fly with on a tablet.  Flight needs held
+     buttons rather than taps, so these set and clear the same virtual key
+     state that input.js reads. */
   hud.setupTouch = function () {
-    touchLayer = document.getElementById('touch');
-    if (!touchLayer) return;
-    /* Offered on any device that reports touch, including touch laptops -
-       there is no cost to a control layer nobody presses.  ?touch=1 forces it
-       on anywhere, which is how it gets tested from a desktop. */
-    if (!hud.isTouchDevice()) return;
+    var isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (!isTouch) return;
+    var bar = document.getElementById('touchbar');
+    if (!bar) return;
+    bar.classList.remove('hidden');
 
-    build();
-    touchLayer.classList.remove('hidden');
-    document.body.classList.add('touch');
-
-    /* Portrait works, but this is a game about seeing what is coming. */
-    if (window.innerHeight > window.innerWidth) {
-      SS.msg('Turn your device sideways for a much wider view.', '#9fd6ff');
-    }
-
-    document.addEventListener('pointerdown', onPointerDown, { passive: false });
-    document.addEventListener('pointermove', onPointerMove, { passive: false });
-    document.addEventListener('pointerup', onPointerUp, { passive: false });
-    document.addEventListener('pointercancel', onPointerUp, { passive: false });
-    /* a long press on a control should not offer to select or search it */
-    touchLayer.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-    hud.layoutTouch();
-    window.addEventListener('resize', hud.layoutTouch);
-    window.addEventListener('orientationchange', hud.layoutTouch);
-  };
-
-  function build() {
-    var html = '';
-    PADS.forEach(function (pad) {
-      html += '<div class="tpad ' + pad.cls + '">';
-      pad.buttons.forEach(function (b) {
-        html += '<button class="tbtn ' + (b.cls || '') + '"' +
-          (b.hold ? ' data-hold="' + b.hold + '"' : '') +
-          (b.act ? ' data-act="' + b.act + '"' : '') +
-          '>' + b.label + '</button>';
-      });
-      html += '</div>';
+    var keys = [
+      ['↶', 'ArrowLeft'], ['▲', 'ArrowUp'], ['↷', 'ArrowRight'],
+      ['▼', 'ArrowDown'], ['GUN', 'Control'], ['BOMB', 'Tab'],
+      ['AB', 'Shift'], ['MAP', 'Alt'], ['☰', 'Escape']
+    ];
+    keys.forEach(function (k) {
+      var b = document.createElement('button');
+      b.textContent = k[0];
+      function down(e) { e.preventDefault(); SS.input.setVirtual(k[1], true); }
+      function up(e) { e.preventDefault(); SS.input.setVirtual(k[1], false); }
+      b.addEventListener('touchstart', down, { passive: false });
+      b.addEventListener('touchend', up, { passive: false });
+      b.addEventListener('touchcancel', up, { passive: false });
+      b.addEventListener('mousedown', down);
+      b.addEventListener('mouseup', up);
+      b.addEventListener('mouseleave', up);
+      bar.appendChild(b);
     });
-
-    html += '<div class="ttop">' +
-      '<button class="tbtn small" data-hold="Alt">MAP</button>' +
-      '<button class="tbtn small" id="tgear">GEAR</button>' +
-      '<button class="tbtn small" data-act="menu">☰</button>' +
-      '</div>';
-
-    html += '<div class="tgear-panel hidden" id="tgearpanel">';
-    GEAR.forEach(function (g) {
-      html += '<button class="tbtn gear" data-act="' + g.act + '">' +
-        escapeHtml(g.label) + '</button>';
-    });
-    html += '</div>';
-
-    touchLayer.innerHTML = html;
-    gearPanel = document.getElementById('tgearpanel');
-
-    document.getElementById('tgear').addEventListener('click', function (e) {
-      e.preventDefault();
-      gearPanel.classList.toggle('hidden');
-    });
-  }
-
-  /* Portrait on a phone leaves very little room between the two thumb zones,
-     so the controls shrink rather than overlap. */
-  hud.layoutTouch = function () {
-    if (!touchLayer || touchLayer.classList.contains('hidden')) return;
-    var w = window.innerWidth, h = window.innerHeight;
-    var compact = Math.min(w, h) < 420 || h < 480;
-    touchLayer.classList.toggle('compact', compact);
-    /* tell the renderer how much of the bottom of the screen is thumbs */
-    if (SS.render && SS.render.setInsets) {
-      var pad = touchLayer.querySelector('.tpad-left');
-      var rect = pad ? pad.getBoundingClientRect() : null;
-      SS.render.setInsets({
-        controls: true,
-        top: 0,
-        bottom: rect ? Math.round(rect.height + 18) : 0,
-        gutter: rect ? Math.round(rect.width + 20) : 0
-      });
-    }
-  };
-
-  /* ---- pointer plumbing ------------------------------------------------ */
-
-  function controlAt(x, y) {
-    var el = document.elementFromPoint(x, y);
-    if (!el || !el.closest) return null;
-    return el.closest('.tbtn');
-  }
-
-  function press(name) {
-    holdCounts[name] = (holdCounts[name] || 0) + 1;
-    if (holdCounts[name] === 1) SS.input.setVirtual(name, true);
-  }
-
-  function release(name) {
-    if (!holdCounts[name]) return;
-    holdCounts[name]--;
-    if (holdCounts[name] <= 0) {
-      delete holdCounts[name];
-      SS.input.setVirtual(name, false);
-    }
-  }
-
-  /* The pointer stays tracked even when it is over nothing, so a thumb that
-     wanders off the pad mid-turn can wander back on again.  Forgetting it the
-     moment it left meant the finger was dead until you lifted it. */
-  function setPointerHold(id, name) {
-    var current = pointerHold[id] || null;
-    if (current === name && (id in pointerHold)) return;
-    if (current) release(current);
-    pointerHold[id] = name;          // may be null: tracked, holding nothing
-    if (name) press(name);
-  }
-
-  function forgetPointer(id) {
-    if (!(id in pointerHold)) return;
-    setPointerHold(id, null);
-    delete pointerHold[id];
-  }
-
-  function onPointerDown(e) {
-    if (hud.isOpen()) return;
-    var btn = controlAt(e.clientX, e.clientY);
-    if (!btn) return;
-    e.preventDefault();
-    btn.classList.add('lit');
-    if (btn.dataset.act) {
-      SS.input.pushAction(btn.dataset.act);
-      window.setTimeout(function () { btn.classList.remove('lit'); }, 110);
-      return;
-    }
-    if (btn.dataset.hold) setPointerHold(e.pointerId, btn.dataset.hold);
-  }
-
-  function onPointerMove(e) {
-    /* only tracks pointers that started on a held control, so dragging on the
-       map does not start steering the ship */
-    if (!(e.pointerId in pointerHold)) return;
-    e.preventDefault();
-    var btn = controlAt(e.clientX, e.clientY);
-    var name = btn && btn.dataset.hold ? btn.dataset.hold : null;
-    setPointerHold(e.pointerId, name);
-    paintLit();
-  }
-
-  function onPointerUp(e) {
-    if (e.pointerId in pointerHold) {
-      e.preventDefault();
-      forgetPointer(e.pointerId);
-    }
-    paintLit();
-  }
-
-  function paintLit() {
-    if (!touchLayer) return;
-    var btns = touchLayer.querySelectorAll('[data-hold]');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('lit', !!holdCounts[btns[i].dataset.hold]);
-    }
-  }
-
-  /* Releasing everything matters more here than on a keyboard: a thumb lifted
-     during a menu never produces a pointerup on the button. */
-  hud.releaseTouch = function () {
-    Object.keys(pointerHold).forEach(forgetPointer);
-    holdCounts = {};
-    paintLit();
   };
 
 })(typeof window !== 'undefined' ? (window.SS = window.SS || {}) : (global.SS = global.SS || {}));
@@ -6105,8 +5676,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
   var down = {};              // physical keys currently held, by event.code
   var pressed = {};           // one-shots since the last consume, by character
-  var virtualKeys = {};       // on-screen held controls, by logical name
-  var queued = [];            // actions pushed directly, by name
+  var virtualKeys = {};       // touch buttons, by logical name
 
   /* Keys we take over completely.  Everything else falls through to the
      browser, so Ctrl+R still reloads and F11 still goes full screen. */
@@ -6188,9 +5758,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
   input.handleKeyDown = onDown;
   input.handleKeyUp = onUp;
 
-  /* An on-screen control being held.  Used only for the things that are
-     genuinely held - turning, thrusting, firing, the map - because those are
-     the ones where a key is the right model. */
   input.setVirtual = function (k, isDown) {
     if (isDown) {
       if (!virtualKeys[k]) {
@@ -6200,19 +5767,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     } else {
       delete virtualKeys[k];
     }
-  };
-
-  /* Queue a discrete action by name, exactly as takeActions would have
-     produced it.
-
-     On-screen buttons use this rather than pretending to be keys.  Half the
-     commands in this game are a modifier plus a key - Shift+Tab, Shift+Home,
-     Shift+Insert - and a touch button that had to synthesise "Shift is down,
-     now Tab went down, now Shift came up" would be recreating a keyboard in
-     order to talk to a keyboard parser.  Naming the action directly is both
-     shorter and impossible to get subtly wrong. */
-  input.pushAction = function (name) {
-    if (name) queued.push(name);
   };
 
   function held(name) {
@@ -6228,14 +5782,6 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
   function shift() { return held('Shift'); }
 
-  /* The afterburner has two sources that do not mean the same thing.
-     On a keyboard it is Shift, which is also the modifier that turns Ctrl
-     into a repel - so holding it deliberately suppresses gunfire.  An
-     on-screen BOOST button is not a modifier for anything: it sits under a
-     different thumb from FIRE and a player holding both means both.  So it
-     gets its own name, and only the keyboard's Shift gates the guns. */
-  function boosting() { return shift() || held('Boost'); }
-
   /* ------------------------------------------------------------------ */
   /* flight                                                             */
   /* ------------------------------------------------------------------ */
@@ -6246,7 +5792,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
       backward: held('ArrowDown') || held('s'),
       left: held('ArrowLeft') || held('a'),
       right: held('ArrowRight') || held('d'),
-      afterburner: boosting()
+      afterburner: shift()
     };
   };
 
@@ -6291,16 +5837,12 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     if (was('^S')) out.push('save');
     if (was('i')) out.push('shipinfo');
 
-    /* actions from on-screen buttons, in the order they were tapped */
-    for (var i = 0; i < queued.length; i++) out.push(queued[i]);
-
     pressed = {};
-    queued = [];
     return out;
   };
 
   input.clear = function () {
-    down = {}; pressed = {}; virtualKeys = {}; queued = [];
+    down = {}; pressed = {}; virtualKeys = {};
   };
 
   /* ------------------------------------------------------------------ */

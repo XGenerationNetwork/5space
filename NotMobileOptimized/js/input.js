@@ -43,8 +43,7 @@
 
   var down = {};              // physical keys currently held, by event.code
   var pressed = {};           // one-shots since the last consume, by character
-  var virtualKeys = {};       // on-screen held controls, by logical name
-  var queued = [];            // actions pushed directly, by name
+  var virtualKeys = {};       // touch buttons, by logical name
 
   /* Keys we take over completely.  Everything else falls through to the
      browser, so Ctrl+R still reloads and F11 still goes full screen. */
@@ -126,9 +125,6 @@
   input.handleKeyDown = onDown;
   input.handleKeyUp = onUp;
 
-  /* An on-screen control being held.  Used only for the things that are
-     genuinely held - turning, thrusting, firing, the map - because those are
-     the ones where a key is the right model. */
   input.setVirtual = function (k, isDown) {
     if (isDown) {
       if (!virtualKeys[k]) {
@@ -138,19 +134,6 @@
     } else {
       delete virtualKeys[k];
     }
-  };
-
-  /* Queue a discrete action by name, exactly as takeActions would have
-     produced it.
-
-     On-screen buttons use this rather than pretending to be keys.  Half the
-     commands in this game are a modifier plus a key - Shift+Tab, Shift+Home,
-     Shift+Insert - and a touch button that had to synthesise "Shift is down,
-     now Tab went down, now Shift came up" would be recreating a keyboard in
-     order to talk to a keyboard parser.  Naming the action directly is both
-     shorter and impossible to get subtly wrong. */
-  input.pushAction = function (name) {
-    if (name) queued.push(name);
   };
 
   function held(name) {
@@ -166,14 +149,6 @@
 
   function shift() { return held('Shift'); }
 
-  /* The afterburner has two sources that do not mean the same thing.
-     On a keyboard it is Shift, which is also the modifier that turns Ctrl
-     into a repel - so holding it deliberately suppresses gunfire.  An
-     on-screen BOOST button is not a modifier for anything: it sits under a
-     different thumb from FIRE and a player holding both means both.  So it
-     gets its own name, and only the keyboard's Shift gates the guns. */
-  function boosting() { return shift() || held('Boost'); }
-
   /* ------------------------------------------------------------------ */
   /* flight                                                             */
   /* ------------------------------------------------------------------ */
@@ -184,7 +159,7 @@
       backward: held('ArrowDown') || held('s'),
       left: held('ArrowLeft') || held('a'),
       right: held('ArrowRight') || held('d'),
-      afterburner: boosting()
+      afterburner: shift()
     };
   };
 
@@ -229,16 +204,12 @@
     if (was('^S')) out.push('save');
     if (was('i')) out.push('shipinfo');
 
-    /* actions from on-screen buttons, in the order they were tapped */
-    for (var i = 0; i < queued.length; i++) out.push(queued[i]);
-
     pressed = {};
-    queued = [];
     return out;
   };
 
   input.clear = function () {
-    down = {}; pressed = {}; virtualKeys = {}; queued = [];
+    down = {}; pressed = {}; virtualKeys = {};
   };
 
   /* ------------------------------------------------------------------ */

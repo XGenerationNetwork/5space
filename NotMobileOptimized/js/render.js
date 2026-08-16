@@ -18,34 +18,8 @@
 
   var canvas, ctx;
   var W = 0, H = 0, dpr = 1;
-
-  /* Screen pixels per tile.  Sixteen is Continuum's, and it is what a desktop
-     gets; a phone would see twenty-three tiles across at that scale, which is
-     not enough of the world to fly in.  So the zoom drops on small viewports
-     and `scale` carries the difference through to everything drawn in pixels
-     rather than tiles - ships, shots, pickups, text. */
-  var BASE_TILE = 16;
-  var MIN_TILES_SHORT_SIDE = 34;    // how much world the short axis must show
-  var TILE = BASE_TILE;
-  var scale = 1;
+  var TILE = 16;                 // screen pixels per tile
   var camX = 0, camY = 0;
-
-  /* Where the on-screen controls are, so the HUD can keep out from under a
-     thumb.  The pads sit in the bottom *corners*, so `gutter` (how far in
-     they reach from each side) matters more than `bottom` (how tall they
-     are): in landscape there is plenty of room between them at the very
-     bottom of the screen, and only in portrait do they meet in the middle
-     and force the gauges upward. */
-  var insets = { top: 0, bottom: 0, gutter: 0, controls: false };
-
-  render.setInsets = function (next) {
-    insets.top = next.top || 0;
-    insets.bottom = next.bottom || 0;
-    insets.gutter = next.gutter || 0;
-    insets.controls = !!next.controls;
-  };
-
-  render.tileSize = function () { return TILE; };
 
   var stars = [];
   var effects = [];
@@ -77,17 +51,7 @@
     canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
-
-    TILE = SS.clamp(Math.floor(Math.min(W, H) / MIN_TILES_SHORT_SIDE), 10, BASE_TILE);
-    scale = TILE / BASE_TILE;
   };
-
-  /* Font sizes are in desktop pixels and get scaled with everything else, but
-     never below the point where they stop being readable. */
-  function font(size, bold) {
-    return (bold ? 'bold ' : '') + Math.max(10, Math.round(size * scale)) +
-      'px "DejaVu Sans Mono", "Courier New", monospace';
-  }
 
   render.viewport = function () { return { w: W, h: H }; };
 
@@ -219,9 +183,8 @@
       var px = sx(g.x), py = sy(g.y);
       if (px < -20 || py < -20 || px > W + 20 || py > H + 20) continue;
       /* the squash makes it read as a rotating gem without a second sprite */
-      var w = (16 * Math.abs(Math.cos(spin * Math.PI * 2)) + 4) * scale;
-      var h = 20 * scale;
-      ctx.drawImage(img, px - w / 2, py - h / 2, w, h);
+      var w = 16 * Math.abs(Math.cos(spin * Math.PI * 2)) + 4;
+      ctx.drawImage(img, px - w / 2, py - 10, w, 20);
     }
   }
 
@@ -235,7 +198,6 @@
       ctx.save();
       ctx.translate(px, py);
       ctx.rotate(wr.orient * Math.PI * 2);
-      ctx.scale(scale, scale);
       ctx.drawImage(img, -14, -14);
       ctx.restore();
     }
@@ -247,8 +209,7 @@
     if (sec.depth !== SS.MAXDEPTH) return;
     var img = SS.sprites.flag();
     var bob = Math.sin(Date.now() / 400) * 3;
-    ctx.drawImage(img, sx(sec.flagStand.x) - 12 * scale, sy(sec.flagStand.y) - 12 * scale + bob,
-      24 * scale, 24 * scale);
+    ctx.drawImage(img, sx(sec.flagStand.x) - 12, sy(sec.flagStand.y) - 12 + bob);
   }
 
   function drawDecoys(sec) {
@@ -277,7 +238,7 @@
       var px = sx(w.x), py = sy(w.y);
       if (px < -30 || py < -30 || px > W + 30 || py > H + 30) continue;
       var st = SHOT_STYLE[w.type] || SHOT_STYLE.bullet;
-      var r = st.r * scale * (w.type === 'bomb' || w.type === 'mine' ? (0.7 + w.level * 0.3) : 1);
+      var r = st.r * (w.type === 'bomb' || w.type === 'mine' ? (0.7 + w.level * 0.3) : 1);
 
       /* bullets get a short streak along their heading */
       if (w.type === 'bullet' || w.type === 'shrap' || w.type === 'burst') {
@@ -332,8 +293,7 @@
       ctx.globalAlpha = 1;
       drawShipDecoration(player, sx(player.x), sy(player.y), true);
       if (player.hasFlag) {
-        ctx.drawImage(SS.sprites.flag(), sx(player.x) - 4 * scale, sy(player.y) - 26 * scale,
-          24 * scale, 24 * scale);
+        ctx.drawImage(SS.sprites.flag(), sx(player.x) - 4, sy(player.y) - 26);
       }
     }
   }
@@ -342,17 +302,16 @@
     var sheet = SS.sprites.shipSheet(key, color);
     var rot = SS.orientToRotation(orient);
     var px = SS.sprites.SHIP_PX;
-    var d = Math.round(px * scale);
     ctx.drawImage(sheet, rot * px, 0, px, px,
-      Math.round(sx(wx) - d / 2), Math.round(sy(wy) - d / 2), d, d);
+      Math.round(sx(wx) - px / 2), Math.round(sy(wy) - px / 2), px, px);
   }
 
   function drawThrustFlame(sh) {
     if (!sh.thrusting) return;
     var head = SS.orientToHeading(sh.orient);
-    var bx = sx(sh.x) - head.x * 18 * scale, by = sy(sh.y) - head.y * 18 * scale;
+    var bx = sx(sh.x) - head.x * 18, by = sy(sh.y) - head.y * 18;
     var flicker = 0.6 + Math.random() * 0.4;
-    var len = (sh.timer.rocket > 0 ? 26 : 14) * flicker * scale;
+    var len = (sh.timer.rocket > 0 ? 26 : 14) * flicker;
     var grad = ctx.createRadialGradient(bx, by, 0, bx, by, len);
     grad.addColorStop(0, sh.timer.rocket > 0 ? '#ffffff' : '#ffe9a0');
     grad.addColorStop(0.4, sh.afterburning ? '#66ccff' : '#ff9a3c');
@@ -372,25 +331,25 @@
         : 'rgba(120,200,255,' + (0.4 + t * 0.3) + ')';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(px, py, 24 * scale, 0, Math.PI * 2);
+      ctx.arc(px, py, 24, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (sh.timer.shutdown > 0) {
       ctx.strokeStyle = 'rgba(255,80,80,0.7)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(px, py, (26 + Math.sin(Date.now() / 90) * 3) * scale, 0, Math.PI * 2);
+      ctx.arc(px, py, 26 + Math.sin(Date.now() / 90) * 3, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (!isPlayer) {
       /* the bounty tag, in SubSpace's own idiom */
-      ctx.font = font(11);
+      ctx.font = '11px "DejaVu Sans Mono", "Courier New", monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = sh.isBoss ? '#ffffff' : 'rgba(255,220,140,0.85)';
-      ctx.fillText(String(Math.round(sh.bounty)), px, py + 30 * scale);
+      ctx.fillText(String(Math.round(sh.bounty)), px, py + 30);
       if (sh.isBoss) {
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillText(sh.name, px, py - 26 * scale);
+        ctx.fillText(sh.name, px, py - 26);
       }
     }
   }
@@ -460,13 +419,13 @@
         ctx.strokeStyle = SS.sprites.rgba(e.color, 1 - t);
         ctx.lineWidth = 3 * (1 - t) + 1;
         ctx.beginPath();
-        ctx.arc(px, py, (8 + t * 40) * scale, 0, Math.PI * 2);
+        ctx.arc(px, py, 8 + t * 40, 0, Math.PI * 2);
         ctx.stroke();
       } else if (e.kind === 'float') {
-        ctx.font = font(13, true);
+        ctx.font = 'bold 13px "DejaVu Sans Mono", "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = SS.sprites.rgba(e.color, 1 - t);
-        ctx.fillText(e.text, px, py - (30 + t * 26) * scale);
+        ctx.fillText(e.text, px, py - 30 - t * 26);
       }
     }
   }
@@ -478,17 +437,17 @@
   var RADAR_PX = 190;
 
   function drawRadar(sec, player) {
-    var size = Math.min(RADAR_PX, Math.floor(Math.min(W, H) * (insets.controls ? 0.22 : 0.28)));
+    var size = Math.min(RADAR_PX, Math.floor(Math.min(W, H) * 0.28));
     var x0 = W - size - 12, y0 = 12;
     var span = 110;                       // tiles across the pane
-    var pxPerTile = size / span;   // radar pixels per world tile
+    var scale = size / span;
 
     panel(x0, y0, size, size);
 
     var ox = player.x - span / 2, oy = player.y - span / 2;
 
     /* explored terrain, sampled rather than drawn tile by tile */
-    var stepT = Math.max(1, Math.round(1 / pxPerTile));
+    var stepT = Math.max(1, Math.round(1 / scale));
     for (var ty = 0; ty < span; ty += stepT) {
       for (var tx = 0; tx < span; tx += stepT) {
         var wx = Math.floor(ox + tx), wy = Math.floor(oy + ty);
@@ -499,15 +458,15 @@
         var c = SS.TILES[t].color;
         if (!c) continue;
         ctx.fillStyle = c;
-        ctx.fillRect(x0 + tx * pxPerTile, y0 + ty * pxPerTile,
-          Math.max(1, stepT * pxPerTile), Math.max(1, stepT * pxPerTile));
+        ctx.fillRect(x0 + tx * scale, y0 + ty * scale,
+          Math.max(1, stepT * scale), Math.max(1, stepT * scale));
       }
     }
 
     var blips = SS.radar.blips(sec, player);
     for (var i = 0; i < blips.length; i++) {
       var b = blips[i];
-      var bx = x0 + (b.x - ox) * pxPerTile, by = y0 + (b.y - oy) * pxPerTile;
+      var bx = x0 + (b.x - ox) * scale, by = y0 + (b.y - oy) * scale;
       if (bx < x0 || by < y0 || bx > x0 + size || by > y0 + size) continue;
       ctx.fillStyle = b.color;
       if (b.ring) {
@@ -534,12 +493,12 @@
   function drawFullMap(sec, player) {
     var size = Math.min(W, H) - 80;
     var x0 = (W - size) / 2, y0 = (H - size) / 2;
-    var mapScale = size / sec.size;
+    var scale = size / sec.size;
 
     ctx.fillStyle = 'rgba(4,6,12,0.92)';
     ctx.fillRect(x0 - 8, y0 - 8, size + 16, size + 16);
 
-    var step = Math.max(1, Math.round(1 / mapScale));
+    var step = Math.max(1, Math.round(1 / scale));
     for (var ty = 0; ty < sec.size; ty += step) {
       for (var tx = 0; tx < sec.size; tx += step) {
         if (!sec.explored[ty * sec.size + tx]) continue;
@@ -548,8 +507,8 @@
         var c = SS.TILES[t].color;
         if (!c) continue;
         ctx.fillStyle = c;
-        ctx.fillRect(x0 + tx * mapScale, y0 + ty * mapScale,
-          Math.max(1, step * mapScale), Math.max(1, step * mapScale));
+        ctx.fillRect(x0 + tx * scale, y0 + ty * scale,
+          Math.max(1, step * scale), Math.max(1, step * scale));
       }
     }
 
@@ -557,15 +516,15 @@
     for (var i = 0; i < blips.length; i++) {
       var b = blips[i];
       ctx.fillStyle = b.color;
-      ctx.fillRect(x0 + b.x * mapScale - 2, y0 + b.y * mapScale - 2, 4, 4);
+      ctx.fillRect(x0 + b.x * scale - 2, y0 + b.y * scale - 2, 4, 4);
     }
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x0 + player.x * mapScale - 2, y0 + player.y * mapScale - 2, 4, 4);
+    ctx.fillRect(x0 + player.x * scale - 2, y0 + player.y * scale - 2, 4, 4);
 
     ctx.strokeStyle = 'rgba(120,180,220,0.6)';
     ctx.strokeRect(x0 - 0.5, y0 - 0.5, size + 1, size + 1);
 
-    ctx.font = font(13);
+    ctx.font = '13px "DejaVu Sans Mono", "Courier New", monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(180,210,240,0.9)';
     ctx.fillText('Sector ' + sec.depth + '  -  release Alt to return',
@@ -588,18 +547,9 @@
     var max = SS.ship.energyMax(p);
     var frac = SS.clamp(p.energy / max, 0, 1);
 
-    /* The bar wants the bottom centre.  If the thumb pads leave a usable gap
-       between them - which they do in landscape - it stays there and just
-       narrows to fit.  Only when they close up, as they do in portrait, does
-       it climb above them. */
-    var gap = W - insets.gutter * 2;
-    var lifted = insets.controls && gap < 220;
-    var barH = insets.controls ? 14 : 18;
-    var barW = lifted
-      ? Math.min(460, W * 0.6)
-      : SS.clamp(gap - 24, 120, Math.min(460, W * 0.5));
-    var x0 = (W - barW) / 2;
-    var y0 = H - barH - 16 - (lifted ? insets.bottom : 0);
+    var barW = Math.min(460, W * 0.5);
+    var barH = 18;
+    var x0 = (W - barW) / 2, y0 = H - barH - 16;
 
     panel(x0 - 3, y0 - 3, barW + 6, barH + 6);
 
@@ -614,11 +564,10 @@
     ctx.lineWidth = 1;
     ctx.strokeRect(x0 + 0.5, y0 + 0.5, barW - 1, barH - 1);
 
-    ctx.font = font(12, true);
+    ctx.font = 'bold 12px "DejaVu Sans Mono", "Courier New", monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#eaf2ff';
-    ctx.fillText(Math.round(p.energy) + ' / ' + Math.round(max),
-      x0 + barW / 2, y0 + barH - 5);
+    ctx.fillText(Math.round(p.energy) + ' / ' + Math.round(max), x0 + barW / 2, y0 + 13);
 
     /* the safe-zone loiter clock, when it is running */
     if (game.sector.inSafeZone(p.x, p.y)) {
@@ -628,17 +577,13 @@
     }
   }
 
-  /* Hull, sector, bounty, points, and the stock of every limited-use item
-     this hull can carry.  Bottom-left on a desktop; when on-screen controls
-     are up there is no bottom-left to speak of, so it collapses to two lines
-     under the message log instead. */
+  /* Bottom-left readout: hull, sector, bounty, points, and the stock of every
+     limited-use item that this hull can actually carry. */
   function drawStatus(game) {
     var p = game.player;
+    var lines = [];
     var def = SS.ship.def(p);
 
-    if (insets.controls) { drawStatusCompact(game); return; }
-
-    var lines = [];
     lines.push({ text: def.name + '  -  Sector ' + game.sector.depth +
       (game.player.hasFlag ? '  [PRIME FLAG]' : ''), color: '#cfe4ff' });
     lines.push({ text: 'Guns ' + p.guns + '   Bombs ' + (p.bombs || '-') +
@@ -666,7 +611,7 @@
       '   Kills ' + p.kills + '   T ' + SS.clockString(game.elapsed),
       color: '#7f96b0' });
 
-    ctx.font = font(12);
+    ctx.font = '12px "DejaVu Sans Mono", "Courier New", monospace';
     ctx.textAlign = 'left';
     var lh = 16;
     var boxH = lines.length * lh + 10;
@@ -675,42 +620,6 @@
       ctx.fillStyle = lines[i].color;
       ctx.fillText(lines[i].text, 16, H - boxH - 8 + 18 + i * lh);
     }
-  }
-
-  /* The phone version: only what you have to glance at mid-fight, tucked
-     under the radar where no thumb reaches. */
-  function drawStatusCompact(game) {
-    var p = game.player;
-    var def = SS.ship.def(p);
-
-    var first = def.name + '  S' + game.sector.depth +
-      '  G' + p.guns + (p.bombs ? ' B' + p.bombs : '') +
-      '  ' + Math.round(p.bounty) + 'pts' +
-      (p.hasFlag ? '  [FLAG]' : '');
-
-    var stock = [];
-    SS.weapons.UTILITIES.forEach(function (u) {
-      var n = p.count[u.key];
-      if (!n) return;
-      stock.push(u.label.charAt(0) + n);
-    });
-    ['cloak', 'stealth', 'xradar', 'antiwarp'].forEach(function (k) {
-      if (p.on[k]) stock.push(k.slice(0, 4).toUpperCase());
-    });
-
-    ctx.font = font(11);
-    ctx.textAlign = 'left';
-    var lh = Math.round(14 * scale);
-    var y = insets.top + 8;
-    var lines = (stock.length && W >= 520) ? [first, stock.join(' ')] : [first];
-    var wide = 0;
-    lines.forEach(function (t) { wide = Math.max(wide, ctx.measureText(t).width); });
-
-    panel(8, y, wide + 16, lines.length * lh + 8);
-    lines.forEach(function (t, i) {
-      ctx.fillStyle = i ? '#8fa6c0' : '#cfe4ff';
-      ctx.fillText(t, 16, y + 14 + i * lh);
-    });
   }
 
 })(typeof window !== 'undefined' ? (window.SS = window.SS || {}) : (global.SS = global.SS || {}));

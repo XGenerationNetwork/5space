@@ -1,0 +1,70 @@
+# Deploy 5Space to GitHub Pages.
+#
+# This workflow is optional.  The repository is already a static site, so
+# Settings -> Pages -> "Deploy from a branch" works with no CI at all.  Use
+# this instead if you want the test suite to gate deployment: a push that
+# breaks sector generation, the save format or the asset paths will fail here
+# and the broken build will never reach the site.
+#
+# To enable: Settings -> Pages -> Source -> "GitHub Actions".
+
+name: Deploy to Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Allow one deployment at a time; let a run in progress finish rather than
+# cancelling it half way through publishing.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step: the game has no dependencies and the harness runs on
+      # the standard library alone.
+      - name: Run the test suite
+        run: node test/headless.js
+
+      # The committed bundle is served from the site, so it must not be stale.
+      # Rebuilding and diffing catches a source change that never made it in.
+      - name: Check the single-file bundle is current
+        run: |
+          node build.js /tmp/5space-check.html
+          diff -q 5space.html /tmp/5space-check.html \
+            || (echo "::error::5space.html is stale - run 'node build.js' and commit it" && exit 1)
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

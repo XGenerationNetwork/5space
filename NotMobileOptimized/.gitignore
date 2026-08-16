@@ -1,0 +1,16 @@
+# 5Space has no build pipeline and no dependencies, so there is very little to
+# ignore.  5space.html IS committed on purpose: it is the shareable offline
+# copy of the game, and it is served from the deployed site.
+
+# editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# local tooling that is not part of the site
+.claude/
+node_modules/
+
+# scratch files from local experiments
+*.tmp.js

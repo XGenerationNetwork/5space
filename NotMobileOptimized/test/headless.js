@@ -1249,59 +1249,6 @@ function stageInput() {
   upEv('Alt', 'AltLeft');
   ok(!K.showingMap(), 'releasing Alt hides it again');
 
-  /* ---- on-screen controls -------------------------------------------- */
-
-  /* The DOM side of the touch layer is verified in a browser; what is worth
-     pinning here is the contract it talks to input.js through, and the one
-     place where a touch control and a key deliberately differ. */
-
-  K.clear();
-  SS.input.setVirtual('ArrowLeft', true);
-  ok(K.flight().left, 'an on-screen control turns the ship');
-  SS.input.setVirtual('ArrowLeft', false);
-  ok(!K.flight().left, 'and releasing it stops');
-
-  /* BOOST is not Shift.  On a keyboard Shift+Ctrl is a repel and suppresses
-     the guns; on screen the two are separate buttons under separate thumbs,
-     and holding both has to mean both. */
-  K.clear();
-  SS.input.setVirtual('Control', true);
-  ok(K.firingGun(), 'the on-screen fire button fires');
-  SS.input.setVirtual('Boost', true);
-  ok(K.flight().afterburner, 'the on-screen boost button lights the afterburner');
-  ok(K.firingGun(), 'holding BOOST does not stop the guns firing');
-  K.clear();
-
-  downEv('Control', 'ControlLeft', { ctrl: true });
-  downEv('Shift', 'ShiftLeft', { shift: true });
-  ok(!K.firingGun(), 'the keyboard Shift+Ctrl repel still suppresses the guns');
-  K.clear();
-
-  /* Buttons name actions directly rather than synthesising modifier+key. */
-  SS.input.pushAction('burst');
-  SS.input.pushAction('cloak');
-  actions = K.takeActions();
-  ok(actions.indexOf('burst') >= 0 && actions.indexOf('cloak') >= 0,
-    'pushed actions come out of takeActions (' + actions.join(',') + ')');
-  eq(K.takeActions().length, 0, 'and are consumed exactly once');
-
-  /* Every button the touch layer offers must name an action the game
-     dispatcher actually handles, or it is a button that does nothing. */
-  const dispatched = fs.readFileSync(path.join(root, 'js/game.js'), 'utf8');
-  const handled = {};
-  const caseRe = /case '([a-z]+)':/g;
-  let cm;
-  while ((cm = caseRe.exec(dispatched)) !== null) handled[cm[1]] = true;
-
-  const hudSrc = fs.readFileSync(path.join(root, 'js/hud.js'), 'utf8');
-  const actRe = /\bact: '([a-z]+)'/g;
-  let am, buttons = 0;
-  while ((am = actRe.exec(hudSrc)) !== null) {
-    buttons++;
-    ok(handled[am[1]], 'the on-screen "' + am[1] + '" button names an action game.js handles');
-  }
-  ok(buttons > 10, 'the touch layer offers the full command set (' + buttons + ' buttons)');
-
   K.clear();
   K.takeActions();
 }
