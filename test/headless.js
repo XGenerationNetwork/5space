@@ -2093,6 +2093,44 @@ function stageDocs() {
     ok(/alt="[^"]{40,}"/.test(frame), 'figure ' + (i + 1) + ' has a real alt description');
   });
 
+  /* ---- the new-player advice is arithmetic, so check the arithmetic ----
+   *
+   * The welcome page tells a beginner to fly Easy with the trigger held,
+   * because an unspent bar out-recharges what the early pilots can take off
+   * it.  That is a claim about four settings, quoted by value.  Retune any of
+   * them and the advice silently becomes wrong - a new player would be told
+   * they are safe while being killed - so the numbers are asserted rather
+   * than trusted. */
+  const wb = SS.SHIPS.warbird.settings;
+  const quoted = {
+    'a shot costs': wb.BulletFireEnergy,
+    'a hit costs': SS.ARENA.BulletDamageLevel,
+    'the pool': wb.InitialEnergy,
+    'the recharge': wb.InitialRecharge / 10
+  };
+  Object.keys(quoted).forEach((what) => {
+    ok(new RegExp('<b>' + quoted[what] + '</b>').test(manual),
+      'the beginner advice quotes ' + what + ' as ' + quoted[what] + ', which is what ships.js says');
+  });
+
+  /* The advice only holds while recharge outruns incoming fire.  If a bullet
+     ever costs more than a couple of seconds of charge, "nothing kills you
+     while your finger is off the trigger" stops being true. */
+  const secondsPerHit = SS.ARENA.BulletDamageLevel / (wb.InitialRecharge / 10);
+  ok(secondsPerHit < 3,
+    'a bullet is worth under three seconds of recharge (' + secondsPerHit.toFixed(1) + 's), '
+    + 'so an unspent bar really does outlast a lone attacker');
+  ok(wb.InitialEnergy / SS.ARENA.BulletDamageLevel >= 4,
+    'a factory bar absorbs at least four bullets, so "not one hit" holds');
+  /* And the punchline of the red callout: firing is about as dear as bleeding. */
+  const ratio = wb.BulletFireEnergy / SS.ARENA.BulletDamageLevel;
+  ok(ratio > 0.8 && ratio < 1.2,
+    'firing a shot still costs about what being hit by one does (' + ratio.toFixed(2) + 'x)');
+
+  /* Easy has to still be the mode that advice is safe in. */
+  ok(SS.difficultyByKey('easy').ships > 1, 'Easy still gives more than one hull');
+  ok(SS.difficultyByKey('easy').enemySkill < 1, 'and still flies softer pilots');
+
   /* the data tables should be self-consistent */
   const seen = {};
   SS.PRIZES.forEach((p) => {
