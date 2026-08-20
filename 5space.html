@@ -5965,6 +5965,25 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
     if (overlayClick) overlay.addEventListener('click', overlayClick);
   }
 
+  /* Closing a menu is also the moment the on-screen controls come back.
+   *
+   * While an overlay is up, `#overlay:not(.hidden) ~ #touch` takes the whole
+   * control layer out of the layout - so any measuring done in that window
+   * sees zeroes, and layoutTouch bails rather than deciding from them.  That
+   * leaves the layout owed, and here is where it is paid: the three places a
+   * menu closes all come through this.
+   *
+   * The bug this fixes: the game boots with the title screen open, so the
+   * first layout ran against a hidden layer, concluded the utility stack fit
+   * nowhere, and withdrew it - and nothing recomputed until the phone was
+   * rotated, which is exactly how it presented. */
+  function hideOverlay() {
+    overlay.classList.add('hidden');
+    overlay.innerHTML = '';
+    overlayOpen = false;
+    if (hud.layoutTouch) relayout();
+  }
+
   /* ------------------------------------------------------------------ */
   /* messages                                                           */
   /* ------------------------------------------------------------------ */
@@ -6135,9 +6154,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
 
     function close(result) {
       setOverlayClick(null);
-      overlay.classList.add('hidden');
-      overlay.innerHTML = '';
-      overlayOpen = false;
+      hideOverlay();
       return result;
     }
 
@@ -6220,9 +6237,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         }
         if (ticker) window.clearInterval(ticker);
         setOverlayClick(null);
-        overlay.classList.add('hidden');
-        overlay.innerHTML = '';
-        overlayOpen = false;
+        hideOverlay();
         return null;
       });
     })();
@@ -6293,9 +6308,7 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
         try { input.blur(); } catch (e) { /* ignore */ }
         /* the overlay outlives this prompt, so its listener must not */
         overlay.removeEventListener('mousedown', keepFocus);
-        overlay.classList.add('hidden');
-        overlay.innerHTML = '';
-        overlayOpen = false;
+        hideOverlay();
         resolve(result);
       }
 
@@ -6502,6 +6515,18 @@ body.touch .mrow.pick { padding: 9px 8px; }   /* tappable rows */
      so the controls shrink rather than overlap. */
   hud.layoutTouch = function () {
     if (!touchLayer || touchLayer.classList.contains('hidden')) return;
+    /* Rendered, not merely un-hidden.
+     *
+     * A menu takes the layer out of the layout with `#overlay:not(.hidden) ~
+     * #touch`, which sets no class here - so this used to run happily against
+     * a layer that had no boxes at all.  Every rect came back as zeroes, which
+     * reads as "every button is jammed into the top-left corner and fits
+     * nowhere", and the utility stack was withdrawn on that basis.  The game
+     * boots with the title screen up, so that was the *first* layout of every
+     * session; only a rotation recomputed it.
+     *
+     * position:fixed rules out offsetParent as the test, hence client rects. */
+    if (!touchLayer.getClientRects().length) return;
     var w = window.innerWidth, h = window.innerHeight;
     var compact = Math.min(w, h) < 420 || h < 480;
     touchLayer.classList.toggle('compact', compact);

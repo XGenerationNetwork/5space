@@ -1696,6 +1696,34 @@ function stageInput() {
   ok(/hud\.controlsOverlap/.test(hudSrc),
     'the decision is made by measuring overlap, not by a width breakpoint');
 
+  /* ---- laying out a layer that is not on screen ----------------------
+   *
+   * A menu takes the control layer out of the flow with a CSS sibling rule
+   * that sets no class, so `hidden` is not the test for whether measuring is
+   * safe.  When a resize arrived while a menu was up - which on a phone is
+   * just the on-screen keyboard opening for the name prompt - every rect
+   * came back zero, that read as "nothing fits anywhere", and the utility
+   * stack was withdrawn and stayed withdrawn until the device was rotated.
+   *
+   * Two halves, and both are load-bearing: do not decide from a layer with
+   * no boxes, and make the deferred decision when the layer comes back. */
+  const layoutFn = (hudSrc.match(/hud\.layoutTouch = function[\s\S]*?\n  \};/) || [''])[0];
+  const guardAt = layoutFn.indexOf('getClientRects');
+  const firstMeasure = layoutFn.indexOf('getBoundingClientRect');
+  ok(guardAt >= 0, 'layoutTouch checks the layer is actually rendered');
+  ok(guardAt >= 0 && firstMeasure >= 0 && guardAt < firstMeasure,
+    'and checks it before measuring anything, not after');
+  ok(!/\.offsetParent/.test(layoutFn),
+    'the check is not offsetParent, which is null for position:fixed even when shown');
+
+  const rawHides = (hudSrc.match(/overlay\.classList\.add\('hidden'\)/g) || []).length;
+  eq(rawHides, 1, 'exactly one place hides the overlay, so no close can skip the relayout');
+  const hideFn = (hudSrc.match(/function hideOverlay\(\)[\s\S]*?\n  \}/) || [''])[0];
+  ok(/relayout\(\)/.test(hideFn),
+    'closing a menu relayouts, so a decision deferred while it was open still gets made');
+  ok((hudSrc.match(/hideOverlay\(\);/g) || []).length >= 3,
+    'and every menu close routes through it');
+
   /* The withdrawal is display:none, so it has to be cleared before anything
      is measured - a zero-sized button reads as "fits nowhere", which once made
      the withdrawal permanent the first time a small viewport was seen. */
